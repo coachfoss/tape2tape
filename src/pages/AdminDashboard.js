@@ -1,454 +1,707 @@
-// src/AdminDashboard.js
-import React, { useState, useEffect } from "react";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth, db } from "../firebase";
-import {
-  collection,
-  getDocs,
-  doc,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy,
-  where,
-  serverTimestamp,
-  addDoc
-} from "firebase/firestore";
-
-// Create notification function (inline to avoid import issues)
-const createNotification = async (userId, type, message, videoId = null) => {
-  try {
-    await addDoc(collection(db, "notifications"), {
-      userId,
-      type,
-      message,
-      videoId,
-      read: false,
-      createdAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error("Error creating notification:", error);
-  }
-};
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { db } from '../firebase';
+import { collection, getDocs, doc, updateDoc, query, orderBy, limit } from 'firebase/firestore';
 
 export default function AdminDashboard() {
-  const [user] = useAuthState(auth);
-  const [userRole, setUserRole] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [videos, setVideos] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [activeTab, setActiveTab] = useState("users");
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
+  
+  // Admin check
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Stats
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeUsers: 0,
+    totalVideos: 0,
+    totalReviews: 0,
+    storageUsed: 0,
+    freeUsers: 0,
+    proUsers: 0,
+    teamUsers: 0
+  });
+
+  // Users list
+  const [users, setUsers] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (!user) return;
+    checkAdminStatus();
+  }, []);
 
-    const fetchAdminData = async () => {
-      try {
-        // Check if user is admin
-        const userDoc = await getDocs(
-          query(collection(db, "users"), where("email", "==", user.email))
-        );
-        
-        if (!userDoc.empty) {
-          const userData = userDoc.docs[0].data();
-          setUserRole(userData.role);
-          
-          if (userData.role !== "admin") {
-            return; // Not an admin, don't load admin data
-          }
-        }
-
-        // Load all users
-        const usersSnapshot = await getDocs(
-          query(collection(db, "users"), orderBy("createdAt", "desc"))
-        );
-        setUsers(
-          usersSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-        );
-
-        // Load all videos
-        const videosSnapshot = await getDocs(
-          query(collection(db, "videos"), orderBy("createdAt", "desc"))
-        );
-        setVideos(
-          videosSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-        );
-
-        // Load all notifications
-        const notificationsSnapshot = await getDocs(
-          query(collection(db, "notifications"), orderBy("createdAt", "desc"))
-        );
-        setNotifications(
-          notificationsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
-        );
-
-      } catch (error) {
-        console.error("Error loading admin data:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAdminData();
-  }, [user]);
-
-  const updateUserRole = async (userId, newRole) => {
+  const checkAdminStatus = async () => {
+    // TODO: Implement proper admin check from your auth system
+    // For now, this is a placeholder
+    const adminEmail = 'admin@tape2tape.com'; // Change this to your admin email
+    
     try {
-      await updateDoc(doc(db, "users", userId), {
+      // Check if current user is admin
+      // This should be implemented with your Firebase auth
+      setIsAdmin(true); // Set to true for demo purposes
+      
+      if (isAdmin) {
+        await loadAdminData();
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      navigate('/dashboard');
+    }
+  };
+
+  const loadAdminData = async () => {
+    try {
+      // Load all users
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const usersData = [];
+      
+      let freeCount = 0;
+      let proCount = 0;
+      let teamCount = 0;
+      let totalStorage = 0;
+      let totalVids = 0;
+      let totalRevs = 0;
+
+      usersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        usersData.push({
+          id: doc.id,
+          ...data
+        });
+
+        // Count by plan
+        if (data.plan === 'Free') freeCount++;
+        else if (data.plan === 'Pro') proCount++;
+        else if (data.plan === 'Team') teamCount++;
+
+        // Accumulate stats
+        totalStorage += data.storageUsed || 0;
+        totalVids += data.videosUploaded || 0;
+        totalRevs += data.reviewsCompleted || 0;
+      });
+
+      setUsers(usersData);
+      setStats({
+        totalUsers: usersData.length,
+        activeUsers: usersData.filter(u => u.lastActive && 
+          new Date(u.lastActive.toDate()) > new Date(Date.now() - 30*24*60*60*1000)).length,
+        totalVideos: totalVids,
+        totalReviews: totalRevs,
+        storageUsed: totalStorage,
+        freeUsers: freeCount,
+        proUsers: proCount,
+        teamUsers: teamCount
+      });
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changeUserRole = async (userId, newRole) => {
+    if (!window.confirm(`Change user to ${newRole}?`)) return;
+
+    try {
+      await updateDoc(doc(db, 'users', userId), {
         role: newRole,
-        updatedAt: serverTimestamp(),
+        updatedAt: new Date()
       });
 
-      // Update local state
-      setUsers(prevUsers =>
-        prevUsers.map(u => u.id === userId ? { ...u, role: newRole } : u)
-      );
-
-      // Notify the user about role change
-      await createNotification(
-        userId,
-        "role_change",
-        `Your role has been updated to ${newRole}`,
-        null
-      );
-
-      alert("User role updated successfully");
+      // Refresh users list
+      await loadAdminData();
+      alert('User role updated successfully!');
     } catch (error) {
-      console.error("Error updating user role:", error);
-      alert("Failed to update user role");
+      console.error('Error updating user role:', error);
+      alert('Failed to update user role');
     }
   };
 
-  const updateSubscriptionStatus = async (userId, newStatus) => {
+  const changePlan = async (userId, newPlan) => {
+    if (!window.confirm(`Change user plan to ${newPlan}?`)) return;
+
     try {
-      await updateDoc(doc(db, "users", userId), {
-        subscriptionStatus: newStatus,
-        updatedAt: serverTimestamp(),
+      const storageLimit = newPlan === 'Free' ? 1024 : newPlan === 'Pro' ? 51200 : 512000;
+      
+      await updateDoc(doc(db, 'users', userId), {
+        plan: newPlan,
+        storageLimit: storageLimit,
+        updatedAt: new Date()
       });
 
-      setUsers(prevUsers =>
-        prevUsers.map(u => 
-          u.id === userId ? { ...u, subscriptionStatus: newStatus } : u
-        )
-      );
-
-      await createNotification(
-        userId,
-        "subscription_change",
-        `Your subscription status has been updated to ${newStatus}`,
-        null
-      );
-
-      alert("Subscription status updated successfully");
+      await loadAdminData();
+      alert('User plan updated successfully!');
     } catch (error) {
-      console.error("Error updating subscription:", error);
-      alert("Failed to update subscription status");
+      console.error('Error updating user plan:', error);
+      alert('Failed to update user plan');
     }
   };
 
-  const deleteVideo = async (videoId, videoName) => {
-    if (!window.confirm(`Are you sure you want to delete "${videoName}"?`)) return;
+  const filteredUsers = users.filter(user => 
+    user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.displayName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-    try {
-      await deleteDoc(doc(db, "videos", videoId));
-      setVideos(prevVideos => prevVideos.filter(v => v.id !== videoId));
-      alert("Video deleted successfully");
-    } catch (error) {
-      console.error("Error deleting video:", error);
-      alert("Failed to delete video");
-    }
-  };
-
-  const deleteUser = async (userId, userEmail) => {
-    if (!window.confirm(`Are you sure you want to delete user "${userEmail}"?`)) return;
-
-    try {
-      await deleteDoc(doc(db, "users", userId));
-      setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
-      alert("User deleted successfully");
-    } catch (error) {
-      console.error("Error deleting user:", error);
-      alert("Failed to delete user");
-    }
-  };
-
-  const sendBulkNotification = async () => {
-    const message = window.prompt("Enter notification message:");
-    if (!message) return;
-
-    const targetRole = window.prompt("Send to which role? (all/client/coach):");
-    if (!targetRole) return;
-
-    try {
-      let targetUsers = users;
-      if (targetRole !== "all") {
-        targetUsers = users.filter(u => u.role === targetRole);
-      }
-
-      const promises = targetUsers.map(u =>
-        createNotification(u.id, "admin_announcement", message, null)
-      );
-
-      await Promise.all(promises);
-      alert(`Notification sent to ${targetUsers.length} users`);
-    } catch (error) {
-      console.error("Error sending bulk notification:", error);
-      alert("Failed to send notifications");
-    }
-  };
-
-  if (loading) return <div style={{ padding: 20 }}>Loading admin dashboard...</div>;
-  if (userRole !== "admin") {
+  if (loading) {
     return (
-      <div style={{ padding: 20, textAlign: "center" }}>
-        <h2>Access Denied</h2>
-        <p>You don't have permission to access the admin dashboard.</p>
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#000',
+        color: 'white',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <p>Loading admin panel...</p>
       </div>
     );
   }
 
-  const tabStyle = (tabName) => ({
-    padding: "12px 24px",
-    border: "none",
-    backgroundColor: activeTab === tabName ? "#007bff" : "#f8f9fa",
-    color: activeTab === tabName ? "white" : "#333",
-    cursor: "pointer",
-    marginRight: "4px",
-    borderRadius: "8px 8px 0 0"
-  });
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2>Admin Dashboard</h2>
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#000',
+      color: 'white'
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '20px 40px',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,0,0,0.1)'
+      }}>
+        <div>
+          <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '5px' }}>
+            🛡️ Admin Dashboard
+          </h1>
+          <p style={{ fontSize: '14px', color: '#999' }}>
+            Manage users, monitor system health, and view analytics
+          </p>
+        </div>
         <button
-          onClick={sendBulkNotification}
+          onClick={() => navigate('/dashboard')}
           style={{
-            padding: "8px 16px",
-            backgroundColor: "#28a745",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer"
+            padding: '10px 20px',
+            backgroundColor: '#333',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer'
           }}
         >
-          Send Bulk Notification
+          Exit Admin Mode
         </button>
       </div>
 
-      {/* Tab Navigation */}
-      <div style={{ marginBottom: 20 }}>
-        <button
-          style={tabStyle("users")}
-          onClick={() => setActiveTab("users")}
-        >
-          Users ({users.length})
-        </button>
-        <button
-          style={tabStyle("videos")}
-          onClick={() => setActiveTab("videos")}
-        >
-          Videos ({videos.length})
-        </button>
-        <button
-          style={tabStyle("analytics")}
-          onClick={() => setActiveTab("analytics")}
-        >
-          Analytics
-        </button>
+      {/* Tabs */}
+      <div style={{
+        padding: '20px 40px',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        display: 'flex',
+        gap: '10px'
+      }}>
+        {['overview', 'users', 'analytics'].map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: activeTab === tab ? '#ff0000' : 'transparent',
+              color: 'white',
+              border: activeTab === tab ? 'none' : '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+              fontWeight: activeTab === tab ? 'bold' : 'normal'
+            }}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
-      {/* Tab Content */}
-      <div style={{ border: "1px solid #ddd", borderRadius: "0 8px 8px 8px", padding: 20 }}>
-        
-        {activeTab === "users" && (
+      {/* Content */}
+      <div style={{ padding: '40px', maxWidth: '1400px', margin: '0 auto' }}>
+        {activeTab === 'overview' && (
           <div>
-            <h3>User Management</h3>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ backgroundColor: "#f8f9fa" }}>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Email</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Name</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Role</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Subscription</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id}>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>{u.email}</td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>{u.displayName || "-"}</td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        <select
-                          value={u.role || "client"}
-                          onChange={(e) => updateUserRole(u.id, e.target.value)}
-                          style={{ padding: "4px 8px" }}
-                        >
-                          <option value="client">Client</option>
-                          <option value="coach">Coach</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        {u.role === "coach" ? (
-                          <select
-                            value={u.subscriptionStatus || "inactive"}
-                            onChange={(e) => updateSubscriptionStatus(u.id, e.target.value)}
-                            style={{ padding: "4px 8px" }}
-                          >
-                            <option value="inactive">Inactive</option>
-                            <option value="active">Active</option>
-                            <option value="cancelled">Cancelled</option>
-                            <option value="trial">Trial</option>
-                          </select>
-                        ) : (
-                          "N/A"
-                        )}
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        <button
-                          onClick={() => deleteUser(u.id, u.email)}
-                          style={{
-                            padding: "4px 8px",
-                            backgroundColor: "#dc3545",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "12px"
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+            <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '30px' }}>
+              System Overview
+            </h2>
 
-        {activeTab === "videos" && (
-          <div>
-            <h3>Video Management</h3>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ backgroundColor: "#f8f9fa" }}>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Name</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Client</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Coach</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Created</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Status</th>
-                    <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {videos.map(v => (
-                    <tr key={v.id}>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>{v.name}</td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        {users.find(u => u.id === v.clientId)?.email || "Unknown"}
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        {users.find(u => u.id === v.coachId)?.email || "Unassigned"}
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        {v.createdAt?.toDate ? v.createdAt.toDate().toLocaleDateString() : "N/A"}
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        <span style={{
-                          padding: "2px 8px",
-                          backgroundColor: v.reviewed ? "#d4edda" : "#fff3cd",
-                          color: v.reviewed ? "#155724" : "#856404",
-                          borderRadius: "4px",
-                          fontSize: "12px"
-                        }}>
-                          {v.reviewed ? "Reviewed" : "Pending"}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px", border: "1px solid #ddd" }}>
-                        <button
-                          onClick={() => deleteVideo(v.id, v.name)}
-                          style={{
-                            padding: "4px 8px",
-                            backgroundColor: "#dc3545",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "12px"
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "analytics" && (
-          <div>
-            <h3>Platform Analytics</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px" }}>
+            {/* Stats Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '20px',
+              marginBottom: '40px'
+            }}>
               <div style={{
-                padding: "20px",
-                backgroundColor: "#f8f9fa",
-                borderRadius: "8px",
-                textAlign: "center"
+                backgroundColor: '#111',
+                padding: '30px',
+                borderRadius: '12px',
+                border: '1px solid #333'
               }}>
-                <h4 style={{ margin: "0 0 8px 0", color: "#007bff" }}>Total Users</h4>
-                <div style={{ fontSize: "32px", fontWeight: "bold" }}>{users.length}</div>
-              </div>
-              
-              <div style={{
-                padding: "20px",
-                backgroundColor: "#f8f9fa",
-                borderRadius: "8px",
-                textAlign: "center"
-              }}>
-                <h4 style={{ margin: "0 0 8px 0", color: "#28a745" }}>Active Coaches</h4>
-                <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {users.filter(u => u.role === "coach" && u.subscriptionStatus === "active").length}
+                <div style={{ fontSize: '36px', marginBottom: '10px' }}>👥</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  {stats.totalUsers}
+                </div>
+                <div style={{ color: '#999' }}>Total Users</div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>
+                  {stats.activeUsers} active in last 30 days
                 </div>
               </div>
-              
+
               <div style={{
-                padding: "20px",
-                backgroundColor: "#f8f9fa",
-                borderRadius: "8px",
-                textAlign: "center"
+                backgroundColor: '#111',
+                padding: '30px',
+                borderRadius: '12px',
+                border: '1px solid #333'
               }}>
-                <h4 style={{ margin: "0 0 8px 0", color: "#ffc107" }}>Total Videos</h4>
-                <div style={{ fontSize: "32px", fontWeight: "bold" }}>{videos.length}</div>
+                <div style={{ fontSize: '36px', marginBottom: '10px' }}>📹</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  {stats.totalVideos}
+                </div>
+                <div style={{ color: '#999' }}>Videos Uploaded</div>
               </div>
-              
+
               <div style={{
-                padding: "20px",
-                backgroundColor: "#f8f9fa",
-                borderRadius: "8px",
-                textAlign: "center"
+                backgroundColor: '#111',
+                padding: '30px',
+                borderRadius: '12px',
+                border: '1px solid #333'
               }}>
-                <h4 style={{ margin: "0 0 8px 0", color: "#dc3545" }}>Pending Reviews</h4>
-                <div style={{ fontSize: "32px", fontWeight: "bold" }}>
-                  {videos.filter(v => !v.reviewed).length}
+                <div style={{ fontSize: '36px', marginBottom: '10px' }}>✅</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  {stats.totalReviews}
+                </div>
+                <div style={{ color: '#999' }}>Reviews Completed</div>
+              </div>
+
+              <div style={{
+                backgroundColor: '#111',
+                padding: '30px',
+                borderRadius: '12px',
+                border: '1px solid #333'
+              }}>
+                <div style={{ fontSize: '36px', marginBottom: '10px' }}>💾</div>
+                <div style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  {(stats.storageUsed / 1024 / 1024).toFixed(1)}GB
+                </div>
+                <div style={{ color: '#999' }}>Storage Used</div>
+              </div>
+            </div>
+
+            {/* Plan Distribution */}
+            <div style={{
+              backgroundColor: '#111',
+              padding: '30px',
+              borderRadius: '12px',
+              border: '1px solid #333',
+              marginBottom: '40px'
+            }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>
+                Plan Distribution
+              </h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '20px'
+              }}>
+                <div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#999' }}>
+                    {stats.freeUsers}
+                  </div>
+                  <div style={{ color: '#666' }}>Free</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff0000' }}>
+                    {stats.proUsers}
+                  </div>
+                  <div style={{ color: '#666' }}>Pro</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#00ff00' }}>
+                    {stats.teamUsers}
+                  </div>
+                  <div style={{ color: '#666' }}>Team</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div style={{
+              backgroundColor: '#111',
+              padding: '30px',
+              borderRadius: '12px',
+              border: '1px solid #333'
+            }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>
+                Quick Actions
+              </h3>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setActiveTab('users')}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#ff0000',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  Manage Users
+                </button>
+                <button
+                  onClick={() => alert('Export feature coming soon')}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#333',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Export Data
+                </button>
+                <button
+                  onClick={() => alert('System logs coming soon')}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#333',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  View Logs
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          <div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '30px'
+            }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 'bold' }}>
+                User Management
+              </h2>
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#111',
+                  border: '1px solid #333',
+                  borderRadius: '6px',
+                  color: 'white',
+                  width: '300px'
+                }}
+              />
+            </div>
+
+            {/* Users Table */}
+            <div style={{
+              backgroundColor: '#111',
+              borderRadius: '12px',
+              border: '1px solid #333',
+              overflow: 'hidden'
+            }}>
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse'
+              }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#000' }}>
+                    <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #333' }}>User</th>
+                    <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #333' }}>Email</th>
+                    <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #333' }}>Plan</th>
+                    <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #333' }}>Role</th>
+                    <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #333' }}>Videos</th>
+                    <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #333' }}>Storage</th>
+                    <th style={{ padding: '15px', textAlign: 'left', borderBottom: '1px solid #333' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr key={user.id} style={{ borderBottom: '1px solid #222' }}>
+                      <td style={{ padding: '15px' }}>
+                        <div style={{ fontWeight: 'bold' }}>{user.displayName || 'No name'}</div>
+                        <div style={{ fontSize: '12px', color: '#666' }}>ID: {user.id.substring(0, 8)}...</div>
+                      </td>
+                      <td style={{ padding: '15px', color: '#999' }}>{user.email}</td>
+                      <td style={{ padding: '15px' }}>
+                        <span style={{
+                          padding: '4px 12px',
+                          backgroundColor: user.plan === 'Free' ? '#333' : user.plan === 'Pro' ? '#ff0000' : '#00ff00',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}>
+                          {user.plan || 'Free'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '15px' }}>
+                        <span style={{
+                          padding: '4px 12px',
+                          backgroundColor: user.role === 'admin' ? '#ff0000' : '#333',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}>
+                          {user.role || 'coach'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '15px', color: '#999' }}>{user.videosUploaded || 0}</td>
+                      <td style={{ padding: '15px', color: '#999' }}>
+                        {((user.storageUsed || 0) / 1024).toFixed(1)}GB
+                      </td>
+                      <td style={{ padding: '15px' }}>
+                        <div style={{ display: 'flex', gap: '5px' }}>
+                          <select
+                            onChange={(e) => changeUserRole(user.id, e.target.value)}
+                            value={user.role || 'coach'}
+                            style={{
+                              padding: '6px 10px',
+                              backgroundColor: '#000',
+                              color: 'white',
+                              border: '1px solid #333',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            <option value="coach">Coach</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          <select
+                            onChange={(e) => changePlan(user.id, e.target.value)}
+                            value={user.plan || 'Free'}
+                            style={{
+                              padding: '6px 10px',
+                              backgroundColor: '#000',
+                              color: 'white',
+                              border: '1px solid #333',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            <option value="Free">Free</option>
+                            <option value="Pro">Pro</option>
+                            <option value="Team">Team</option>
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {filteredUsers.length === 0 && (
+                <div style={{
+                  padding: '40px',
+                  textAlign: 'center',
+                  color: '#666'
+                }}>
+                  No users found
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <div>
+            <h2 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '30px' }}>
+              Analytics & Insights
+            </h2>
+
+            {/* Revenue Projection */}
+            <div style={{
+              backgroundColor: '#111',
+              padding: '30px',
+              borderRadius: '12px',
+              border: '1px solid #333',
+              marginBottom: '20px'
+            }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>
+                Monthly Revenue Projection
+              </h3>
+              <div style={{ fontSize: '42px', fontWeight: 'bold', color: '#00ff00', marginBottom: '10px' }}>
+                ${(stats.proUsers * 29 + stats.teamUsers * 99).toLocaleString()}
+              </div>
+              <div style={{ color: '#999', marginBottom: '20px' }}>
+                Based on current subscriptions
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div>
+                  <div style={{ color: '#666', fontSize: '14px' }}>Pro Subscriptions</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                    ${(stats.proUsers * 29).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{stats.proUsers} users × $29</div>
+                </div>
+                <div>
+                  <div style={{ color: '#666', fontSize: '14px' }}>Team Subscriptions</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                    ${(stats.teamUsers * 99).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{stats.teamUsers} users × $99</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Growth Metrics */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+              gap: '20px',
+              marginBottom: '20px'
+            }}>
+              <div style={{
+                backgroundColor: '#111',
+                padding: '30px',
+                borderRadius: '12px',
+                border: '1px solid #333'
+              }}>
+                <h4 style={{ fontSize: '16px', color: '#999', marginBottom: '10px' }}>
+                  Conversion Rate
+                </h4>
+                <div style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  {stats.totalUsers > 0 ? 
+                    (((stats.proUsers + stats.teamUsers) / stats.totalUsers) * 100).toFixed(1) : 0}%
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  Free to Paid conversion
+                </div>
+              </div>
+
+              <div style={{
+                backgroundColor: '#111',
+                padding: '30px',
+                borderRadius: '12px',
+                border: '1px solid #333'
+              }}>
+                <h4 style={{ fontSize: '16px', color: '#999', marginBottom: '10px' }}>
+                  Avg. Videos per User
+                </h4>
+                <div style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  {stats.totalUsers > 0 ? (stats.totalVideos / stats.totalUsers).toFixed(1) : 0}
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  User engagement metric
+                </div>
+              </div>
+
+              <div style={{
+                backgroundColor: '#111',
+                padding: '30px',
+                borderRadius: '12px',
+                border: '1px solid #333'
+              }}>
+                <h4 style={{ fontSize: '16px', color: '#999', marginBottom: '10px' }}>
+                  Active User Rate
+                </h4>
+                <div style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '5px' }}>
+                  {stats.totalUsers > 0 ? 
+                    ((stats.activeUsers / stats.totalUsers) * 100).toFixed(1) : 0}%
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  Active in last 30 days
+                </div>
+              </div>
+            </div>
+
+            {/* System Health */}
+            <div style={{
+              backgroundColor: '#111',
+              padding: '30px',
+              borderRadius: '12px',
+              border: '1px solid #333'
+            }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>
+                System Health
+              </h3>
+              <div style={{ display: 'grid', gap: '15px' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <span style={{ color: '#999' }}>API Response Time</span>
+                    <span style={{ color: '#00ff00', fontWeight: 'bold' }}>Excellent</span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: '#000',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: '95%',
+                      height: '100%',
+                      backgroundColor: '#00ff00'
+                    }} />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <span style={{ color: '#999' }}>Storage Capacity</span>
+                    <span style={{ color: '#00ff00', fontWeight: 'bold' }}>Healthy</span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: '#000',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: '67%',
+                      height: '100%',
+                      backgroundColor: '#00ff00'
+                    }} />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <span style={{ color: '#999' }}>Database Performance</span>
+                    <span style={{ color: '#00ff00', fontWeight: 'bold' }}>Optimal</span>
+                  </div>
+                  <div style={{
+                    width: '100%',
+                    height: '8px',
+                    backgroundColor: '#000',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      width: '92%',
+                      height: '100%',
+                      backgroundColor: '#00ff00'
+                    }} />
+                  </div>
                 </div>
               </div>
             </div>

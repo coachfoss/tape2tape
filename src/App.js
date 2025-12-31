@@ -1,211 +1,329 @@
-// src/App.js - Final working version with proper navigation
-import React, { useState, useEffect } from "react";
-import { Routes, Route, Navigate, Link } from "react-router-dom";
-import Auth from "./Auth";
-import Dashboard from "./pages/Dashboard";
-import Profile from "./pages/Profile";
-import EnhancedVideoUpload from "./EnhancedVideoUpload";
-import ReviewViewer from "./ReviewViewer";
-import CoachEditor from "./pages/CoachEditor";
-import AdminDashboard from "./pages/AdminDashboard";
-import SubscriptionManager, { SubscriptionGate } from "./SubscriptionManager";
-import NotificationSystem from "./NotificationSystem";
-import OnboardingFlow, { useOnboarding } from "./OnboardingFlow";
-import UserDataManager from "./UserDataManager";
-import { TermsOfService, PrivacyPolicy, LegalFooter } from "./Legal";
-import ErrorBoundary from "./ErrorBoundary";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth, db } from "./firebase";
-import { doc, getDoc } from "firebase/firestore";
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth, db } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { Toaster } from 'react-hot-toast';
+
+import Landing from './pages/Landing';
+import Auth from './Auth';
+import Dashboard from './Dashboard';
+import Profile from './pages/Profile';
+import SubscriptionManager from './SubscriptionManager';
+import CoachEditor from './CoachEditor';
+import VideoUpload from './VideoUpload';
+import ReviewViewer from './ReviewViewer';
+import WelcomeTour from './components/WelcomeTour';
+
+function Navigation({ user, userData, onLogout }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const isCoach = userData?.role === 'coach';
+  const isOnDashboard = location.pathname === '/dashboard';
+
+  if (!user) return null;
+
+  const navItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: '🏠', roles: ['coach', 'athlete'], hideOnDashboard: true },
+    { path: '/upload', label: 'Upload Video', icon: '📹', roles: ['coach', 'athlete'] },
+    { path: '/subscription', label: 'Subscription', icon: '💳', roles: ['coach'] }
+  ];
+
+  const visibleItems = navItems.filter(item => {
+    const roleMatch = item.roles.includes(userData?.role);
+    const dashboardCheck = !(item.hideOnDashboard && isOnDashboard);
+    return roleMatch && dashboardCheck;
+  });
+
+  return (
+    <nav style={{
+      borderBottom: '1px solid #e9ecef',
+      backgroundColor: 'white',
+      position: 'sticky',
+      top: 0,
+      zIndex: 1000
+    }}>
+      <div style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        padding: '0 20px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        height: '70px'
+      }}>
+        <div
+          onClick={() => navigate('/dashboard')}
+          style={{
+            fontSize: '24px',
+            fontWeight: 'bold',
+            color: '#ff0000',
+            cursor: 'pointer'
+          }}
+        >
+          Tape2Tape
+        </div>
+
+        <div style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
+          {visibleItems.map(item => (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: location.pathname === item.path ? '#ff0000' : '#666',
+                fontWeight: location.pathname === item.path ? 'bold' : 'normal',
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+
+          <div style={{ position: 'relative', paddingLeft: '30px', borderLeft: '1px solid #e9ecef' }}>
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                transition: 'background 0.2s',
+                backgroundColor: showDropdown ? '#f8f9fa' : 'transparent'
+              }}
+            >
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                  {userData?.displayName}
+                </div>
+                <div style={{ fontSize: '12px', color: '#666' }}>
+                  {isCoach ? '🏆 Coach' : '⚡ Athlete'}
+                </div>
+              </div>
+              <span style={{ fontSize: '12px', color: '#666' }}>▼</span>
+            </button>
+
+            {showDropdown && (
+              <>
+                <div
+                  onClick={() => setShowDropdown(false)}
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 99998
+                  }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  backgroundColor: 'white',
+                  border: '1px solid #e9ecef',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  minWidth: '200px',
+                  zIndex: 99999
+                }}>
+                  <button
+                    onClick={() => {
+                      setShowDropdown(false);
+                      navigate('/profile');
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      transition: 'background 0.2s',
+                      borderRadius: '8px 8px 0 0'
+                    }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                  >
+                    👤 Profile & Settings
+                  </button>
+                  <div style={{ height: '1px', backgroundColor: '#e9ecef', margin: '0 8px' }} />
+                  <button
+                    onClick={() => {
+                      setShowDropdown(false);
+                      onLogout();
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      color: '#dc3545',
+                      transition: 'background 0.2s',
+                      borderRadius: '0 0 8px 8px'
+                    }}
+                    onMouseEnter={(e) => e.target.style.backgroundColor = '#fff5f5'}
+                    onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                  >
+                    🚪 Logout
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+function ProtectedRoute({ children, user, userData, requiredRole }) {
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (requiredRole && userData?.role !== requiredRole) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
 
 function AppContent() {
   const [user, loading] = useAuthState(auth);
-  const [userRole, setUserRole] = useState(null);
-  const [subscriptionStatus, setSubscriptionStatus] = useState("inactive");
-  const [loadingUserData, setLoadingUserData] = useState(true);
-  const { needsOnboarding, loading: onboardingLoading } = useOnboarding();
+  const [userData, setUserData] = useState(null);
+  const [userLoading, setUserLoading] = useState(true);
+  const navigate = useNavigate();
 
-  // Load user data when authenticated
   useEffect(() => {
-    if (!user) {
-      setUserRole(null);
-      setSubscriptionStatus("inactive");
-      setLoadingUserData(false);
-      return;
-    }
-
-    const fetchUserData = async () => {
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setUserRole(userData.role || "client");
-          setSubscriptionStatus(userData.subscriptionStatus || "inactive");
-        } else {
-          setUserRole("client");
-          setSubscriptionStatus("inactive");
+    const loadUserData = async () => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            setUserData(userDoc.data());
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error);
         }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      } finally {
-        setLoadingUserData(false);
+      } else {
+        setUserData(null);
       }
+      setUserLoading(false);
     };
 
-    fetchUserData();
-  }, [user]);
+    if (!loading) {
+      loadUserData();
+    }
+  }, [user, loading]);
 
-  // Navigation component
-  const Navigation = () => {
-    return (
-      <nav
-        style={{
-          background: 'var(--surface)',
-          borderBottom: '1px solid var(--border-color)',
-          padding: '1rem 0',
-          marginBottom: '2rem'
-        }}
-      >
-        <div className="container">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-              <Link
-                to="/dashboard"
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 'bold',
-                  textDecoration: 'none',
-                  color: 'var(--primary-color)'
-                }}
-              >
-                Tape2Tape
-              </Link>
-              
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <Link to="/dashboard" className="btn btn-secondary btn-sm">
-                  Dashboard
-                </Link>
-                <Link to="/upload" className="btn btn-secondary btn-sm">
-                  Upload
-                </Link>
-                {userRole === "coach" && (
-                  <Link to="/subscription" className="btn btn-secondary btn-sm">
-                    Subscription
-                  </Link>
-                )}
-                {userRole === "admin" && (
-                  <Link to="/admin" className="btn btn-secondary btn-sm">
-                    Admin
-                  </Link>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              {userRole === "coach" && (
-                <span className={`badge ${
-                  subscriptionStatus === "active" ? "badge-success" :
-                  subscriptionStatus === "trial" ? "badge-warning" : "badge-error"
-                }`}>
-                  {subscriptionStatus}
-                </span>
-              )}
-
-              <NotificationSystem />
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Link to="/profile" className="btn btn-secondary btn-sm">
-                  Profile
-                </Link>
-                <button
-                  onClick={() => auth.signOut()}
-                  className="btn btn-secondary btn-sm"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-    );
+  const handleLogout = async () => {
+    await auth.signOut();
+    navigate('/');
   };
 
-  if (loading || loadingUserData || onboardingLoading) {
-    return <div style={{ padding: 20, textAlign: 'center' }}>Loading your account...</div>;
-  }
-
-  // Show onboarding if needed
-  if (user && needsOnboarding) {
-    return <OnboardingFlow />;
+  if (loading || userLoading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f8f9fa'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+          <p style={{ color: '#666' }}>Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div>
-      {user && <Navigation />}
+    <>
+      {user && <Navigation user={user} userData={userData} onLogout={handleLogout} />}
+      {user && !userData?.onboardingComplete && <WelcomeTour userData={userData} />}
       
       <Routes>
-        {!user ? (
-          <React.Fragment>
-            <Route path="/login" element={<Auth />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </React.Fragment>
-        ) : (
-          <React.Fragment>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/upload" element={<EnhancedVideoUpload />} />
-            <Route path="/review" element={<ReviewViewer />} />
-            <Route path="/data-management" element={<UserDataManager />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            
-            {/* Coach routes with subscription gate */}
-            <Route 
-              path="/editor" 
-              element={
-                <SubscriptionGate userRole={userRole} subscriptionStatus={subscriptionStatus}>
-                  <CoachEditor />
-                </SubscriptionGate>
-              } 
-            />
-            
-            {userRole === "coach" && (
-              <Route path="/subscription" element={<SubscriptionManager />} />
-            )}
-            
-            {userRole === "admin" && (
-              <Route path="/admin" element={<AdminDashboard />} />
-            )}
+        <Route path="/" element={<Landing />} />
+        <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <Auth />} />
 
-            <Route 
-              path="*" 
-              element={
-                <div className="container">
-                  <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-                    <h2>Page Not Found</h2>
-                    <p>The page you're looking for doesn't exist.</p>
-                    <Link to="/dashboard" className="btn btn-primary">Go to Dashboard</Link>
-                  </div>
-                </div>
-              } 
-            />
-          </React.Fragment>
-        )}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute user={user} userData={userData}>
+              <Dashboard user={user} userData={userData} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute user={user} userData={userData}>
+              <Profile user={user} userData={userData} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/upload"
+          element={
+            <ProtectedRoute user={user} userData={userData}>
+              <VideoUpload user={user} userData={userData} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscription"
+          element={
+            <ProtectedRoute user={user} userData={userData} requiredRole="coach">
+              <SubscriptionManager user={user} userData={userData} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/editor/:videoId"
+          element={
+            <ProtectedRoute user={user} userData={userData}>
+              <CoachEditor user={user} userData={userData} />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/review/:videoId"
+          element={
+            <ProtectedRoute user={user} userData={userData}>
+              <ReviewViewer user={user} userData={userData} />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route path="*" element={<Navigate to={user ? "/dashboard" : "/"} />} />
       </Routes>
-
-      <LegalFooter />
-    </div>
+    </>
   );
 }
 
 export default function App() {
   return (
-    <ErrorBoundary>
+    <Router>
+      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
       <AppContent />
-    </ErrorBoundary>
+    </Router>
   );
 }

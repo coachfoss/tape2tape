@@ -2,7 +2,9 @@
 import React, { useState, useEffect } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "./firebase";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
+import { showToast } from "./utils/toast";
+import { createCheckoutSession, createCustomerPortalSession } from "./utils/stripe";
 
 export default function SubscriptionManager() {
   const [user] = useAuthState(auth);
@@ -31,40 +33,52 @@ export default function SubscriptionManager() {
     fetchUserData();
   }, [user]);
 
-  // Temporary demo function - in real app this would go to Stripe
+  // Handle subscription with Stripe Checkout
   const handleSubscribe = async (planType) => {
-    if (!user) return;
+    if (!user) {
+      showToast.error("You must be logged in to subscribe");
+      return;
+    }
 
     try {
-      // For demo purposes, just activate the subscription
-      await updateDoc(doc(db, "users", user.uid), {
-        subscriptionStatus: "active",
-        subscriptionPlan: planType,
-        subscriptionStarted: serverTimestamp(),
-      });
-
-      setSubscriptionStatus("active");
-      alert("Demo: Subscription activated! (In production, this would use Stripe)");
+      showToast.loading("Redirecting to checkout...");
+      
+      const successUrl = `${window.location.origin}/subscription?success=true`;
+      const cancelUrl = `${window.location.origin}/subscription?canceled=true`;
+      
+      // Create Stripe checkout session
+      const checkoutUrl = await createCheckoutSession(
+        user.uid,
+        planType,
+        successUrl,
+        cancelUrl
+      );
+      
+      // Redirect to Stripe Checkout
+      window.location.href = checkoutUrl;
     } catch (error) {
       console.error("Subscription error:", error);
-      alert("Something went wrong. Please try again.");
+      showToast.dismiss();
+      showToast.error("Failed to start checkout. Please try again.");
     }
   };
 
-  const handleCancelSubscription = async () => {
-    if (!window.confirm("Are you sure you want to cancel your subscription?")) return;
+  // Open Stripe Customer Portal for managing subscription
+  const handleManageSubscription = async () => {
+    if (!user) return;
 
     try {
-      await updateDoc(doc(db, "users", user.uid), {
-        subscriptionStatus: "cancelled",
-        cancelledAt: serverTimestamp(),
-      });
-
-      setSubscriptionStatus("cancelled");
-      alert("Subscription cancelled successfully.");
+      showToast.loading("Opening subscription management...");
+      
+      const returnUrl = `${window.location.origin}/subscription`;
+      const portalUrl = await createCustomerPortalSession(user.uid, returnUrl);
+      
+      // Redirect to Stripe Customer Portal
+      window.location.href = portalUrl;
     } catch (error) {
-      console.error("Cancellation error:", error);
-      alert("Failed to cancel subscription. Please try again.");
+      console.error("Error opening customer portal:", error);
+      showToast.dismiss();
+      showToast.error("Failed to open subscription management. Please try again.");
     }
   };
 
@@ -121,18 +135,13 @@ export default function SubscriptionManager() {
         </span>
         {subscriptionStatus === "active" && (
           <button
-            onClick={handleCancelSubscription}
+            onClick={handleManageSubscription}
+            className="btn btn-secondary btn-sm"
             style={{
               marginLeft: "16px",
-              padding: "4px 12px",
-              backgroundColor: "#dc3545",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer"
             }}
           >
-            Cancel Subscription
+            Manage Subscription
           </button>
         )}
       </div>
@@ -141,12 +150,15 @@ export default function SubscriptionManager() {
         <>
           <div style={{
             padding: "16px",
-            backgroundColor: "#fff3cd",
-            border: "1px solid #ffeaa7",
+            backgroundColor: "#e3f2fd",
+            border: "1px solid #90caf9",
             borderRadius: "8px",
             marginBottom: "24px"
           }}>
-            <strong>Demo Mode:</strong> This is a demo version. In production, this would integrate with Stripe for real payments.
+            <strong>💳 Secure Payment Processing</strong>
+            <p style={{ margin: '8px 0 0', fontSize: '14px', color: '#666' }}>
+              All payments are securely processed through Stripe. You can cancel or modify your subscription at any time.
+            </p>
           </div>
 
           <p style={{ marginBottom: "32px", color: "#666" }}>
@@ -212,6 +224,7 @@ export default function SubscriptionManager() {
 
                 <button
                   onClick={() => handleSubscribe(plan.id)}
+                  className="btn btn-primary"
                   style={{
                     width: "100%",
                     padding: "12px",
@@ -224,7 +237,7 @@ export default function SubscriptionManager() {
                     cursor: "pointer"
                   }}
                 >
-                  Choose {plan.name} (Demo)
+                  Subscribe Now - {plan.price}{plan.interval}
                 </button>
               </div>
             ))}

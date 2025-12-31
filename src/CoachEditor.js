@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { storage, db } from "../firebase";
+import { storage, db } from "./firebase";
 import { ref, uploadBytes } from "firebase/storage";
 import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
-import { notifyReviewCompleted } from "../NotificationSystem";
+import { notifyReviewCompleted } from "./NotificationSystem";
 
 const DEFAULT_COLOR = "#ff0000"; // Red only
 const LINE_WIDTH = 3;
@@ -108,6 +108,45 @@ export default function CoachEditor() {
       viewport.name = 'viewport';
       document.head.appendChild(viewport);
     }
+    // Cleanup camera and microphone when component unmounts or user leaves
+useEffect(() => {
+  return () => {
+    // Stop microphone stream
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('Stopped microphone track');
+      });
+      micStreamRef.current = null;
+    }
+    
+    // Stop camera stream
+    if (facecamStreamRef.current) {
+      facecamStreamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('Stopped camera track');
+      });
+      facecamStreamRef.current = null;
+    }
+    
+    // Clear facecam preview
+    if (facecamPreviewRef.current) {
+      facecamPreviewRef.current.srcObject = null;
+    }
+    
+    // Stop media recorder if active
+    if (recMediaRecorderRef.current && recMediaRecorderRef.current.state !== 'inactive') {
+      recMediaRecorderRef.current.stop();
+    }
+    
+    // Cancel animation frame
+    if (compRafRef.current) {
+      cancelAnimationFrame(compRafRef.current);
+    }
+    
+    console.log('CoachEditor cleanup completed - camera should be off');
+  };
+}, []);
     viewport.content = 'width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0';
 
     const preventDefault = (e) => e.preventDefault();
