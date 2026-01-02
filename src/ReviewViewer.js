@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { storage, db } from "./firebase";
 import { ref, getDownloadURL } from "firebase/storage";
 import { doc, getDoc } from "firebase/firestore";
+import toast from 'react-hot-toast';
 
 export default function ReviewViewer() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { videoId } = location.state || {};
 
   const [videoUrl, setVideoUrl] = useState("");
@@ -15,6 +17,7 @@ export default function ReviewViewer() {
   const [analysisUrl, setAnalysisUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -99,7 +102,7 @@ export default function ReviewViewer() {
 
   // Render overlay (only if no analysis video and we have annotations)
   useEffect(() => {
-    if (analysisUrl || annotations.length === 0) return; // Skip if we have analysis video or no annotations
+    if (analysisUrl || annotations.length === 0) return;
     
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -110,15 +113,11 @@ export default function ReviewViewer() {
     let animationId;
 
     const render = () => {
-      // Set canvas size to match video display size
-      const rect = video.getBoundingClientRect();
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 360;
       
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw annotations
       annotations.forEach(shape => {
         if (!shape) return;
 
@@ -174,9 +173,8 @@ export default function ReviewViewer() {
       animationId = requestAnimationFrame(render);
     };
 
-    // Start rendering when video is ready
     const startRendering = () => {
-      if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+      if (video.readyState >= 2) {
         render();
       }
     };
@@ -184,7 +182,6 @@ export default function ReviewViewer() {
     video.addEventListener('loadeddata', startRendering);
     video.addEventListener('play', startRendering);
     
-    // Clean up
     return () => {
       if (animationId) {
         cancelAnimationFrame(animationId);
@@ -194,12 +191,70 @@ export default function ReviewViewer() {
     };
   }, [annotations, analysisUrl]);
 
+  // Download function
+  const handleDownload = async (url, filename) => {
+    if (downloading) return;
+    
+    setDownloading(true);
+    toast.loading('Preparing download...');
+
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.dismiss();
+      toast.success('Download started!');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.dismiss();
+      toast.error('Download failed. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (!videoId) {
     return (
-      <div className="container">
-        <div className="card">
-          <h3>No Video Selected</h3>
-          <p>Please select a video from your dashboard to view the review.</p>
+      <div style={{ 
+        maxWidth: '900px', 
+        margin: '40px auto', 
+        padding: '0 20px' 
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '40px',
+          borderRadius: '12px',
+          border: '1px solid #e9ecef',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>📹</div>
+          <h3 style={{ marginBottom: '12px' }}>No Video Selected</h3>
+          <p style={{ color: '#666', marginBottom: '24px' }}>
+            Please select a video from your dashboard to view the review.
+          </p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#ff0000',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            Back to Dashboard
+          </button>
         </div>
       </div>
     );
@@ -207,78 +262,216 @@ export default function ReviewViewer() {
 
   if (loading) {
     return (
-      <div className="container">
-        <div className="card">
-          <div style={{ textAlign: 'center', padding: '2rem' }}>
-            <div className="loading-spinner" style={{ margin: '0 auto 1rem' }}></div>
-            <p>Loading review...</p>
-          </div>
-        </div>
+      <div style={{ 
+        maxWidth: '900px', 
+        margin: '40px auto', 
+        padding: '0 20px',
+        textAlign: 'center'
+      }}>
+        <div className="spinner"></div>
+        <p style={{ color: '#666', marginTop: '20px' }}>Loading review...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="container">
-        <div className="card">
-          <h3>Error</h3>
-          <p style={{ color: 'var(--error-color)' }}>{error}</p>
+      <div style={{ 
+        maxWidth: '900px', 
+        margin: '40px auto', 
+        padding: '0 20px' 
+      }}>
+        <div style={{
+          backgroundColor: '#fff5f5',
+          padding: '40px',
+          borderRadius: '12px',
+          border: '2px solid #dc3545',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <h3 style={{ marginBottom: '12px', color: '#dc3545' }}>Error</h3>
+          <p style={{ color: '#666' }}>{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container">
-      <div className="page-header">
+    <div style={{ 
+      maxWidth: '1200px', 
+      margin: '0 auto', 
+      padding: '40px 20px' 
+    }}>
+      {/* Header */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: '32px',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
         <div>
-          <h1 className="page-title">Video Review</h1>
-          <p className="page-subtitle">{videoName}</p>
+          <h1 style={{ 
+            fontSize: 'clamp(24px, 5vw, 32px)', 
+            fontWeight: 'bold', 
+            marginBottom: '8px',
+            color: '#333'
+          }}>
+            Video Review
+          </h1>
+          <p style={{ fontSize: '16px', color: '#666' }}>{videoName}</p>
         </div>
+        <button
+          onClick={() => navigate('/dashboard')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '14px'
+          }}
+        >
+          ← Back to Dashboard
+        </button>
       </div>
 
-      <div className="card">
+      {/* Main Video Container */}
+      <div style={{
+        backgroundColor: 'white',
+        padding: 'clamp(20px, 4vw, 32px)',
+        borderRadius: '12px',
+        border: '1px solid #e9ecef',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        marginBottom: '24px'
+      }}>
         {analysisUrl ? (
-          // Show analysis video (preferred - includes everything)
+          // Analysis Video (complete review)
           <div>
-            <h3>Coach Analysis Video</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              This is the complete review with video, audio commentary, and annotations.
-            </p>
-            <div className="video-container">
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '16px',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '4px' }}>
+                  Coach Analysis Video
+                </h3>
+                <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>
+                  Complete review with video, audio commentary, and annotations
+                </p>
+              </div>
+              <button
+                onClick={() => handleDownload(analysisUrl, `${videoName.replace(/\.mp4$/i, '')}-review.webm`)}
+                disabled={downloading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: downloading ? '#ccc' : '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: downloading ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {downloading ? '⏳ Downloading...' : '📥 Download Review'}
+              </button>
+            </div>
+            <div style={{ 
+              position: 'relative',
+              width: '100%',
+              maxWidth: '100%',
+              margin: '0 auto'
+            }}>
               <video 
                 src={analysisUrl} 
                 controls 
-                className="video-player"
                 style={{ 
+                  width: '100%',
+                  maxWidth: '100%',
+                  height: 'auto',
                   borderRadius: '8px',
-                  boxShadow: 'var(--shadow-md)'
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                 }}
                 preload="metadata"
               />
             </div>
           </div>
         ) : videoUrl ? (
-          // Show original video with overlay annotations
+          // Original Video with Annotations
           <div>
-            <h3>Original Video with Annotations</h3>
-            <div className="video-container" style={{ position: 'relative' }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              marginBottom: '16px',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '4px' }}>
+                  Original Video {annotations.length > 0 && 'with Annotations'}
+                </h3>
+                <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>
+                  {annotations.length > 0 
+                    ? `${annotations.length} annotation${annotations.length !== 1 ? 's' : ''} overlaid`
+                    : 'No annotations yet'}
+                </p>
+              </div>
+              <button
+                onClick={() => handleDownload(videoUrl, videoName)}
+                disabled={downloading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: downloading ? '#ccc' : '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: downloading ? 'not-allowed' : 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {downloading ? '⏳ Downloading...' : '📥 Download Video'}
+              </button>
+            </div>
+            
+            <div style={{ 
+              position: 'relative',
+              width: '100%',
+              maxWidth: '100%',
+              margin: '0 auto'
+            }}>
               <video
                 ref={videoRef}
                 src={videoUrl}
                 controls
-                className="video-player"
                 style={{ 
+                  width: '100%',
+                  maxWidth: '100%',
+                  height: 'auto',
                   borderRadius: '8px',
-                  boxShadow: 'var(--shadow-md)'
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  display: 'block'
                 }}
                 preload="metadata"
               />
               {annotations.length > 0 && (
                 <canvas
                   ref={canvasRef}
-                  className="video-overlay"
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -294,54 +487,139 @@ export default function ReviewViewer() {
             
             {annotations.length > 0 && (
               <div style={{ 
-                marginTop: '1rem', 
-                padding: '0.75rem', 
-                backgroundColor: 'var(--background)', 
-                borderRadius: '8px',
-                fontSize: '0.875rem',
-                color: 'var(--text-secondary)'
+                marginTop: '16px', 
+                padding: '12px 16px', 
+                backgroundColor: '#e7f3ff', 
+                borderRadius: '6px',
+                fontSize: '14px',
+                color: '#004085',
+                borderLeft: '4px solid #007bff'
               }}>
-                <strong>Note:</strong> Annotations are overlaid on the video. 
-                {annotations.length} annotation{annotations.length !== 1 ? 's' : ''} found.
+                <strong>📝 Note:</strong> Coach annotations are overlaid on the video above.
               </div>
             )}
 
             {voiceUrl && (
-              <div style={{ marginTop: '1.5rem' }}>
-                <h4>Coach Voice Commentary</h4>
+              <div style={{ 
+                marginTop: '24px',
+                padding: '20px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '8px'
+              }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '12px',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
+                  <h4 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                    🎙️ Coach Voice Commentary
+                  </h4>
+                  <button
+                    onClick={() => handleDownload(voiceUrl, `${videoName.replace(/\.mp4$/i, '')}-voice.webm`)}
+                    disabled={downloading}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: downloading ? '#ccc' : '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: downloading ? 'not-allowed' : 'pointer',
+                      fontWeight: '600',
+                      fontSize: '13px'
+                    }}
+                  >
+                    {downloading ? '⏳' : '📥 Download Audio'}
+                  </button>
+                </div>
                 <audio 
                   src={voiceUrl} 
                   controls 
                   style={{ 
-                    width: '100%', 
-                    marginTop: '0.5rem',
-                    borderRadius: '8px'
+                    width: '100%',
+                    borderRadius: '6px',
+                    outline: 'none'
                   }}
                 />
               </div>
             )}
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-            <h3>No Review Available</h3>
-            <p>The coach hasn't completed the review for this video yet.</p>
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '60px 20px',
+            color: '#666'
+          }}>
+            <div style={{ fontSize: '64px', marginBottom: '16px' }}>⏳</div>
+            <h3 style={{ marginBottom: '12px', color: '#333' }}>Review Pending</h3>
+            <p style={{ fontSize: '16px' }}>
+              Your coach is working on this review. You'll receive an email notification when it's ready!
+            </p>
           </div>
         )}
       </div>
 
-      {!analysisUrl && annotations.length === 0 && !voiceUrl && (
-        <div className="card">
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '2rem',
-            backgroundColor: 'var(--background)',
-            borderRadius: '8px'
+      {/* Info Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '20px'
+      }}>
+        {analysisUrl && (
+          <div style={{
+            backgroundColor: '#d4edda',
+            padding: '20px',
+            borderRadius: '8px',
+            border: '1px solid #c3e6cb'
           }}>
-            <h3>Review Pending</h3>
-            <p>Your coach is working on this review. You'll receive a notification when it's ready!</p>
+            <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
+            <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#155724' }}>
+              Review Complete
+            </h4>
+            <p style={{ fontSize: '14px', color: '#155724', margin: 0 }}>
+              Your coach has finished reviewing this video with full analysis.
+            </p>
           </div>
+        )}
+        
+        {(annotations.length > 0 || voiceUrl) && !analysisUrl && (
+          <div style={{
+            backgroundColor: '#fff3cd',
+            padding: '20px',
+            borderRadius: '8px',
+            border: '1px solid #ffc107'
+          }}>
+            <div style={{ fontSize: '32px', marginBottom: '8px' }}>📋</div>
+            <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#856404' }}>
+              Review Available
+            </h4>
+            <p style={{ fontSize: '14px', color: '#856404', margin: 0 }}>
+              {annotations.length > 0 && voiceUrl 
+                ? 'Annotations and voice commentary available'
+                : annotations.length > 0 
+                  ? 'Annotations available'
+                  : 'Voice commentary available'}
+            </p>
+          </div>
+        )}
+
+        <div style={{
+          backgroundColor: '#e7f3ff',
+          padding: '20px',
+          borderRadius: '8px',
+          border: '1px solid #007bff'
+        }}>
+          <div style={{ fontSize: '32px', marginBottom: '8px' }}>💡</div>
+          <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#004085' }}>
+            Download Available
+          </h4>
+          <p style={{ fontSize: '14px', color: '#004085', margin: 0 }}>
+            Download the video to save it locally or share with teammates.
+          </p>
         </div>
-      )}
+      </div>
     </div>
   );
 }

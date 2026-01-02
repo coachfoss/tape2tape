@@ -5,6 +5,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function Contact() {
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -19,7 +20,6 @@ export default function Contact() {
     setSubmitting(true);
 
     try {
-      // Save contact form submission to Firestore
       await addDoc(collection(db, 'contact-submissions'), {
         ...formData,
         createdAt: serverTimestamp(),
@@ -28,7 +28,6 @@ export default function Contact() {
 
       setSubmitted(true);
       
-      // Reset form after 3 seconds
       setTimeout(() => {
         setFormData({ name: '', email: '', subject: 'general', message: '' });
         setSubmitted(false);
@@ -59,13 +58,18 @@ export default function Contact() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '20px 40px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)'
+        padding: 'clamp(16px, 3vw, 20px) clamp(20px, 5vw, 40px)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        position: 'sticky',
+        top: 0,
+        backgroundColor: 'rgba(0,0,0,0.95)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 100
       }}>
         <div 
           onClick={() => navigate('/')}
           style={{ 
-            fontSize: '24px', 
+            fontSize: 'clamp(20px, 4vw, 24px)', 
             fontWeight: 'bold', 
             color: '#ff0000',
             cursor: 'pointer'
@@ -73,7 +77,10 @@ export default function Contact() {
         >
           Tape2Tape
         </div>
+        
+        {/* Desktop Nav */}
         <button
+          className="desktop-nav"
           onClick={() => navigate('/')}
           style={{
             padding: '10px 20px',
@@ -81,21 +88,65 @@ export default function Contact() {
             color: 'white',
             border: '1px solid white',
             borderRadius: '6px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            fontSize: '14px'
           }}
         >
           Back to Home
         </button>
+
+        {/* Mobile Menu Button */}
+        <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{
+            display: 'none',
+            background: 'none',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            fontSize: '24px',
+            cursor: 'pointer',
+            padding: '8px 12px',
+            borderRadius: '6px'
+          }}
+        >
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
       </nav>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu" style={{
+          display: 'none',
+          flexDirection: 'column',
+          backgroundColor: 'rgba(10,10,10,0.98)',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          padding: '20px'
+        }}>
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              padding: '12px',
+              backgroundColor: 'transparent',
+              color: 'white',
+              border: '1px solid white',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            Back to Home
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div style={{
         maxWidth: '800px',
         margin: '0 auto',
-        padding: '80px 40px'
+        padding: 'clamp(60px, 10vw, 80px) clamp(20px, 5vw, 40px)'
       }}>
         <h1 style={{
-          fontSize: '48px',
+          fontSize: 'clamp(32px, 7vw, 48px)',
           fontWeight: 'bold',
           marginBottom: '20px',
           textAlign: 'center'
@@ -103,12 +154,12 @@ export default function Contact() {
           Get in Touch
         </h1>
         <p style={{
-          fontSize: '18px',
+          fontSize: 'clamp(16px, 3vw, 18px)',
           color: '#999',
-          marginBottom: '60px',
+          marginBottom: 'clamp(40px, 8vw, 60px)',
           textAlign: 'center',
           maxWidth: '600px',
-          margin: '0 auto 60px'
+          margin: '0 auto clamp(40px, 8vw, 60px)'
         }}>
           Have a question, feedback, or need help? We're here for you. Send us a message and we'll respond within 24 hours.
         </p>
@@ -118,14 +169,14 @@ export default function Contact() {
             backgroundColor: 'rgba(0, 255, 0, 0.1)',
             border: '2px solid #00ff00',
             borderRadius: '12px',
-            padding: '40px',
+            padding: 'clamp(30px, 6vw, 40px)',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>✅</div>
-            <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '10px' }}>
+            <div style={{ fontSize: 'clamp(40px, 8vw, 48px)', marginBottom: '20px' }}>✅</div>
+            <h2 style={{ fontSize: 'clamp(20px, 4vw, 24px)', fontWeight: 'bold', marginBottom: '10px' }}>
               Message Sent!
             </h2>
-            <p style={{ color: '#999' }}>
+            <p style={{ color: '#999', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>
               We'll get back to you within 24 hours at {formData.email}
             </p>
           </div>
@@ -133,17 +184,17 @@ export default function Contact() {
           <form onSubmit={handleSubmit}>
             <div style={{
               backgroundColor: '#111',
-              padding: '40px',
+              padding: 'clamp(24px, 5vw, 40px)',
               borderRadius: '12px',
               border: '1px solid #333'
             }}>
               {/* Name */}
-              <div style={{ marginBottom: '25px' }}>
+              <div style={{ marginBottom: 'clamp(20px, 4vw, 25px)' }}>
                 <label style={{
                   display: 'block',
                   marginBottom: '10px',
                   fontWeight: '500',
-                  fontSize: '14px',
+                  fontSize: 'clamp(13px, 2.5vw, 14px)',
                   color: '#ccc'
                 }}>
                   Your Name *
@@ -156,12 +207,12 @@ export default function Contact() {
                   required
                   style={{
                     width: '100%',
-                    padding: '15px',
+                    padding: 'clamp(12px, 2.5vw, 15px)',
                     backgroundColor: '#000',
                     border: '1px solid #333',
                     borderRadius: '8px',
                     color: 'white',
-                    fontSize: '16px',
+                    fontSize: 'clamp(14px, 2.5vw, 16px)',
                     outline: 'none'
                   }}
                   placeholder="John Doe"
@@ -169,12 +220,12 @@ export default function Contact() {
               </div>
 
               {/* Email */}
-              <div style={{ marginBottom: '25px' }}>
+              <div style={{ marginBottom: 'clamp(20px, 4vw, 25px)' }}>
                 <label style={{
                   display: 'block',
                   marginBottom: '10px',
                   fontWeight: '500',
-                  fontSize: '14px',
+                  fontSize: 'clamp(13px, 2.5vw, 14px)',
                   color: '#ccc'
                 }}>
                   Email Address *
@@ -187,12 +238,12 @@ export default function Contact() {
                   required
                   style={{
                     width: '100%',
-                    padding: '15px',
+                    padding: 'clamp(12px, 2.5vw, 15px)',
                     backgroundColor: '#000',
                     border: '1px solid #333',
                     borderRadius: '8px',
                     color: 'white',
-                    fontSize: '16px',
+                    fontSize: 'clamp(14px, 2.5vw, 16px)',
                     outline: 'none'
                   }}
                   placeholder="john@example.com"
@@ -200,12 +251,12 @@ export default function Contact() {
               </div>
 
               {/* Subject */}
-              <div style={{ marginBottom: '25px' }}>
+              <div style={{ marginBottom: 'clamp(20px, 4vw, 25px)' }}>
                 <label style={{
                   display: 'block',
                   marginBottom: '10px',
                   fontWeight: '500',
-                  fontSize: '14px',
+                  fontSize: 'clamp(13px, 2.5vw, 14px)',
                   color: '#ccc'
                 }}>
                   Subject *
@@ -217,12 +268,12 @@ export default function Contact() {
                   required
                   style={{
                     width: '100%',
-                    padding: '15px',
+                    padding: 'clamp(12px, 2.5vw, 15px)',
                     backgroundColor: '#000',
                     border: '1px solid #333',
                     borderRadius: '8px',
                     color: 'white',
-                    fontSize: '16px',
+                    fontSize: 'clamp(14px, 2.5vw, 16px)',
                     outline: 'none',
                     cursor: 'pointer'
                   }}
@@ -237,12 +288,12 @@ export default function Contact() {
               </div>
 
               {/* Message */}
-              <div style={{ marginBottom: '30px' }}>
+              <div style={{ marginBottom: 'clamp(25px, 5vw, 30px)' }}>
                 <label style={{
                   display: 'block',
                   marginBottom: '10px',
                   fontWeight: '500',
-                  fontSize: '14px',
+                  fontSize: 'clamp(13px, 2.5vw, 14px)',
                   color: '#ccc'
                 }}>
                   Message *
@@ -255,12 +306,12 @@ export default function Contact() {
                   rows={6}
                   style={{
                     width: '100%',
-                    padding: '15px',
+                    padding: 'clamp(12px, 2.5vw, 15px)',
                     backgroundColor: '#000',
                     border: '1px solid #333',
                     borderRadius: '8px',
                     color: 'white',
-                    fontSize: '16px',
+                    fontSize: 'clamp(14px, 2.5vw, 16px)',
                     outline: 'none',
                     resize: 'vertical',
                     fontFamily: 'inherit'
@@ -275,14 +326,14 @@ export default function Contact() {
                 disabled={submitting}
                 style={{
                   width: '100%',
-                  padding: '18px',
+                  padding: 'clamp(14px, 3vw, 18px)',
                   backgroundColor: submitting ? '#666' : '#ff0000',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: submitting ? 'not-allowed' : 'pointer',
                   fontWeight: 'bold',
-                  fontSize: '16px',
+                  fontSize: 'clamp(15px, 3vw, 16px)',
                   transition: 'background-color 0.3s ease'
                 }}
               >
@@ -294,38 +345,53 @@ export default function Contact() {
 
         {/* Additional Contact Info */}
         <div style={{
-          marginTop: '60px',
+          marginTop: 'clamp(40px, 8vw, 60px)',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-          gap: '30px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+          gap: 'clamp(20px, 4vw, 30px)'
         }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '36px', marginBottom: '15px' }}>📧</div>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>
+            <div style={{ fontSize: 'clamp(32px, 6vw, 36px)', marginBottom: '15px' }}>📧</div>
+            <h3 style={{ fontSize: 'clamp(16px, 3vw, 18px)', fontWeight: 'bold', marginBottom: '10px' }}>
               Email Us
             </h3>
             <a 
               href="mailto:support@tape2tape.com"
-              style={{ color: '#999', textDecoration: 'none' }}
+              style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(14px, 2.5vw, 15px)' }}
             >
               support@tape2tape.com
             </a>
           </div>
 
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '36px', marginBottom: '15px' }}>📚</div>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>
+            <div style={{ fontSize: 'clamp(32px, 6vw, 36px)', marginBottom: '15px' }}>📚</div>
+            <h3 style={{ fontSize: 'clamp(16px, 3vw, 18px)', fontWeight: 'bold', marginBottom: '10px' }}>
               Help Center
             </h3>
             <a 
               href="/faq"
-              style={{ color: '#ff0000', textDecoration: 'none' }}
+              style={{ color: '#ff0000', textDecoration: 'none', fontSize: 'clamp(14px, 2.5vw, 15px)' }}
             >
               Visit FAQ
             </a>
           </div>
         </div>
       </div>
+
+      {/* Mobile Responsive Styles */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .desktop-nav {
+            display: none !important;
+          }
+          .mobile-menu-btn {
+            display: block !important;
+          }
+          .mobile-menu {
+            display: flex !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -38,6 +38,8 @@ const setCorsHeaders = (res) => {
   res.set('Access-Control-Max-Age', '3600');
 };
 
+// ============= STRIPE FUNCTIONS =============
+
 exports.createCheckoutSession = onRequest(async (req, res) => {
   setCorsHeaders(res);
 
@@ -241,6 +243,115 @@ exports.stripeWebhook = onRequest(async (req, res) => {
   }
 });
 
+// ============= EMAIL NOTIFICATION FUNCTIONS =============
+
+// Generate unique coach code
+function generateCoachCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+// Welcome email when new user signs up
+exports.onUserCreated = onDocumentCreated(
+    "users/{userId}",
+    async (event) => {
+      const userData = event.data.data();
+      const userId = event.params.userId;
+
+      logger.info("New user created:", {userId, userData});
+
+      try {
+        // Auto-assign coach code if user is a coach
+        if (userData.role === 'coach' && !userData.coachCode) {
+          let code = generateCoachCode();
+          let isUnique = false;
+
+          while (!isUnique) {
+            const existing = await admin.firestore()
+                .collection("users")
+                .where("coachCode", "==", code)
+                .limit(1)
+                .get();
+
+            if (existing.empty) {
+              isUnique = true;
+            } else {
+              code = generateCoachCode();
+            }
+          }
+
+          await admin.firestore()
+              .collection("users")
+              .doc(userId)
+              .update({
+                coachCode: code,
+              });
+
+          logger.info(`Assigned coach code ${code} to user ${userId}`);
+        }
+
+        // Send welcome email
+        const resend = getResend();
+        if (!resend) {
+          logger.error("Resend not configured");
+          return;
+        }
+
+        const userName = userData.displayName || userData.email.split('@')[0];
+        const userRole = userData.role === 'coach' ? 'Coach' : 'Athlete';
+
+        await resend.emails.send({
+          from: "Coach Foss @ Tape2Tape <onboarding@resend.dev>",
+          to: userData.email,
+          subject: "Welcome to Tape2Tape! 🏒",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>Hey ${userName},</h2>
+              
+              <p>My name is Foss — I'm the founder of Tape2Tape.</p>
+              
+              <p>We started Tape2Tape because we wanted a better way for coaches and athletes to collaborate. 
+              A simple, fast, and powerful platform for video coaching that just works.</p>
+              
+              <p><strong>Here are 3 tips to get started:</strong></p>
+              
+              <ol>
+                <li><strong><a href="https://tape2tape-2cd5f.web.app/upload" style="color: #ff0000;">Upload your first video</a></strong></li>
+                <li><strong><a href="https://tape2tape-2cd5f.web.app/profile" style="color: #ff0000;">Complete your profile</a></strong></li>
+                ${userData.role === 'coach' ?
+                  '<li><strong><a href="https://tape2tape-2cd5f.web.app/subscription" style="color: #ff0000;">Activate your coaching subscription</a></strong></li>' :
+                  '<li><strong><a href="https://tape2tape-2cd5f.web.app/dashboard" style="color: #ff0000;">Connect with a coach</a></strong></li>'
+                }
+              </ol>
+              
+              <p><strong>P.S.:</strong> Why did you sign up? What brought you here?</p>
+              
+              <p>Hit "Reply" and let me know. I read and reply to every email.</p>
+              
+              <p>Cheers,<br>
+              <strong>Coach Foss</strong><br>
+              Founder, Tape2Tape</p>
+              
+              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+              
+              <p style="font-size: 12px; color: #666;">
+                You're receiving this because you signed up as a ${userRole} on Tape2Tape.
+              </p>
+            </div>
+          `,
+        });
+
+        logger.info("Welcome email sent to:", userData.email);
+      } catch (error) {
+        logger.error("Error in onUserCreated:", error);
+      }
+    });
+
+// Email when video uploaded
 exports.onVideoUploaded = onDocumentCreated(
     "videos/{videoId}",
     async (event) => {
@@ -273,11 +384,12 @@ exports.onVideoUploaded = onDocumentCreated(
           "An athlete";
 
         const resend = getResend();
-if (!resend) {
-  logger.error("Resend not configured");
-  return;
-}
-await resend.emails.send({
+        if (!resend) {
+          logger.error("Resend not configured");
+          return;
+        }
+
+        await resend.emails.send({
           from: "Tape2Tape <onboarding@resend.dev>",
           to: coachEmail,
           subject: "New Video Ready for Review - Tape2Tape",
@@ -287,7 +399,7 @@ await resend.emails.send({
             <p><strong>Title:</strong> ${video.name}</p>
             ${video.description ? `<p><strong>Notes:</strong> ${video.description}</p>` : ""}
             <p>
-              <a href="https://tape2tape-2cd5f.web.app/coach-editor" 
+              <a href="https://tape2tape-2cd5f.web.app/dashboard" 
                  style="display: inline-block; padding: 12px 24px; background-color: #007bff; 
                         color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
                 Review Video Now
@@ -305,6 +417,7 @@ await resend.emails.send({
       }
     });
 
+// Email when review completed
 exports.onReviewCompleted = onDocumentUpdated(
     "videos/{videoId}",
     async (event) => {
@@ -339,11 +452,12 @@ exports.onReviewCompleted = onDocumentUpdated(
             "Your coach";
 
           const resend = getResend();
-if (!resend) {
-  logger.error("Resend not configured");
-  return;
-}
-await resend.emails.send({
+          if (!resend) {
+            logger.error("Resend not configured");
+            return;
+          }
+
+          await resend.emails.send({
             from: "Tape2Tape <onboarding@resend.dev>",
             to: athleteEmail,
             subject: "Your Video Review is Ready! - Tape2Tape",

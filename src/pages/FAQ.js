@@ -6,6 +6,7 @@ export default function FAQ() {
   const [searchTerm, setSearchTerm] = useState('');
   const [openCategory, setOpenCategory] = useState(null);
   const [openQuestion, setOpenQuestion] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const categories = [
     {
@@ -207,13 +208,18 @@ export default function FAQ() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '20px 40px',
-        borderBottom: '1px solid rgba(255,255,255,0.1)'
+        padding: 'clamp(16px, 3vw, 20px) clamp(20px, 5vw, 40px)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        position: 'sticky',
+        top: 0,
+        backgroundColor: 'rgba(0,0,0,0.95)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 100
       }}>
         <div 
           onClick={() => navigate('/')}
           style={{ 
-            fontSize: '24px', 
+            fontSize: 'clamp(20px, 4vw, 24px)', 
             fontWeight: 'bold', 
             color: '#ff0000',
             cursor: 'pointer'
@@ -221,12 +227,65 @@ export default function FAQ() {
         >
           Tape2Tape
         </div>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <a href="/contact" style={{ color: 'white', textDecoration: 'none' }}>Contact</a>
+        
+        {/* Desktop Nav */}
+        <div className="desktop-nav" style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          <a href="/contact" style={{ color: 'white', textDecoration: 'none', fontSize: '15px' }}>Contact</a>
           <button
             onClick={() => navigate('/')}
             style={{
               padding: '10px 20px',
+              backgroundColor: 'transparent',
+              color: 'white',
+              border: '1px solid white',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Back to Home
+          </button>
+        </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{
+            display: 'none',
+            background: 'none',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            fontSize: '24px',
+            cursor: 'pointer',
+            padding: '8px 12px',
+            borderRadius: '6px'
+          }}
+        >
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
+      </nav>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu" style={{
+          display: 'none',
+          flexDirection: 'column',
+          backgroundColor: 'rgba(10,10,10,0.98)',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          padding: '20px',
+          gap: '16px'
+        }}>
+          <a 
+            href="/contact" 
+            style={{ color: 'white', textDecoration: 'none', padding: '12px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.05)' }}
+          >
+            Contact
+          </a>
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              padding: '12px',
               backgroundColor: 'transparent',
               color: 'white',
               border: '1px solid white',
@@ -237,27 +296,28 @@ export default function FAQ() {
             Back to Home
           </button>
         </div>
-      </nav>
+      )}
 
       {/* Hero */}
       <div style={{
-        padding: '80px 40px 60px',
+        padding: 'clamp(60px, 10vw, 80px) clamp(20px, 5vw, 40px) clamp(40px, 8vw, 60px)',
         textAlign: 'center',
         borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <h1 style={{
-          fontSize: '48px',
+          fontSize: 'clamp(32px, 7vw, 48px)',
           fontWeight: 'bold',
           marginBottom: '20px'
         }}>
           Help Center
         </h1>
         <p style={{
-          fontSize: '18px',
+          fontSize: 'clamp(16px, 3vw, 18px)',
           color: '#999',
           marginBottom: '40px',
           maxWidth: '600px',
-          margin: '0 auto 40px'
+          margin: '0 auto 40px',
+          padding: '0 20px'
         }}>
           Find answers to common questions and learn how to get the most out of Tape2Tape
         </p>
@@ -265,7 +325,8 @@ export default function FAQ() {
         {/* Search */}
         <div style={{
           maxWidth: '600px',
-          margin: '0 auto'
+          margin: '0 auto',
+          padding: '0 20px'
         }}>
           <input
             type="text"
@@ -274,8 +335,8 @@ export default function FAQ() {
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
               width: '100%',
-              padding: '18px 24px',
-              fontSize: '16px',
+              padding: 'clamp(14px, 3vw, 18px) clamp(18px, 4vw, 24px)',
+              fontSize: 'clamp(14px, 2.5vw, 16px)',
               borderRadius: '12px',
               border: '1px solid rgba(255,255,255,0.2)',
               backgroundColor: 'rgba(255,255,255,0.05)',
@@ -290,14 +351,14 @@ export default function FAQ() {
       <div style={{
         maxWidth: '1000px',
         margin: '0 auto',
-        padding: '60px 40px'
+        padding: 'clamp(40px, 8vw, 60px) clamp(20px, 5vw, 40px)'
       }}>
         {searchTerm === '' && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '20px',
-            marginBottom: '60px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 180px), 1fr))',
+            gap: 'clamp(16px, 3vw, 20px)',
+            marginBottom: 'clamp(40px, 8vw, 60px)'
           }}>
             {categories.map(category => (
               <button
@@ -307,7 +368,7 @@ export default function FAQ() {
                   document.getElementById(category.id)?.scrollIntoView({ behavior: 'smooth' });
                 }}
                 style={{
-                  padding: '30px 20px',
+                  padding: 'clamp(20px, 4vw, 30px) clamp(16px, 3vw, 20px)',
                   backgroundColor: '#111',
                   border: '1px solid #333',
                   borderRadius: '12px',
@@ -325,13 +386,13 @@ export default function FAQ() {
                   e.currentTarget.style.borderColor = '#333';
                 }}
               >
-                <div style={{ fontSize: '36px', marginBottom: '10px' }}>
+                <div style={{ fontSize: 'clamp(28px, 6vw, 36px)', marginBottom: '10px' }}>
                   {category.icon}
                 </div>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
+                <div style={{ fontWeight: 'bold', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>
                   {category.title}
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                <div style={{ fontSize: 'clamp(11px, 2vw, 12px)', color: '#666', marginTop: '5px' }}>
                   {category.questions.length} articles
                 </div>
               </button>
@@ -342,11 +403,11 @@ export default function FAQ() {
         {/* FAQ Accordion */}
         <div>
           {filteredCategories.map(category => (
-            <div key={category.id} id={category.id} style={{ marginBottom: '40px' }}>
+            <div key={category.id} id={category.id} style={{ marginBottom: 'clamp(30px, 6vw, 40px)' }}>
               <h2 style={{
-                fontSize: '28px',
+                fontSize: 'clamp(22px, 4.5vw, 28px)',
                 fontWeight: 'bold',
-                marginBottom: '20px',
+                marginBottom: 'clamp(16px, 3vw, 20px)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px'
@@ -373,7 +434,7 @@ export default function FAQ() {
                         onClick={() => setOpenQuestion(isOpen ? null : `${category.id}-${index}`)}
                         style={{
                           width: '100%',
-                          padding: '20px 24px',
+                          padding: 'clamp(16px, 3vw, 20px) clamp(18px, 4vw, 24px)',
                           backgroundColor: 'transparent',
                           color: 'white',
                           border: 'none',
@@ -382,25 +443,29 @@ export default function FAQ() {
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          fontSize: '16px',
-                          fontWeight: '500'
+                          gap: '12px',
+                          fontSize: 'clamp(15px, 3vw, 16px)',
+                          fontWeight: '500',
+                          lineHeight: '1.4'
                         }}
                       >
                         <span>{item.q}</span>
                         <span style={{
-                          fontSize: '20px',
+                          fontSize: 'clamp(16px, 3.5vw, 20px)',
                           transition: 'transform 0.3s ease',
-                          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                          transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          flexShrink: 0
                         }}>
                           ▼
                         </span>
                       </button>
                       {isOpen && (
                         <div style={{
-                          padding: '0 24px 24px',
+                          padding: '0 clamp(18px, 4vw, 24px) clamp(18px, 4vw, 24px)',
                           color: '#ccc',
                           lineHeight: '1.6',
-                          borderTop: '1px solid #222'
+                          borderTop: '1px solid #222',
+                          fontSize: 'clamp(14px, 2.5vw, 15px)'
                         }}>
                           {item.a}
                         </div>
@@ -416,12 +481,12 @@ export default function FAQ() {
         {filteredCategories.length === 0 && (
           <div style={{
             textAlign: 'center',
-            padding: '60px 20px',
+            padding: 'clamp(40px, 8vw, 60px) 20px',
             color: '#666'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔍</div>
-            <p style={{ fontSize: '18px' }}>No results found for "{searchTerm}"</p>
-            <p style={{ fontSize: '14px', marginTop: '10px' }}>
+            <div style={{ fontSize: 'clamp(40px, 8vw, 48px)', marginBottom: '20px' }}>🔍</div>
+            <p style={{ fontSize: 'clamp(16px, 3vw, 18px)' }}>No results found for "{searchTerm}"</p>
+            <p style={{ fontSize: 'clamp(13px, 2.5vw, 14px)', marginTop: '10px' }}>
               Try different keywords or <a href="/contact" style={{ color: '#ff0000' }}>contact us</a> directly
             </p>
           </div>
@@ -429,15 +494,15 @@ export default function FAQ() {
 
         {/* Still Need Help */}
         <div style={{
-          marginTop: '80px',
-          padding: '40px',
+          marginTop: 'clamp(60px, 10vw, 80px)',
+          padding: 'clamp(30px, 6vw, 40px)',
           backgroundColor: '#111',
           borderRadius: '12px',
           border: '1px solid #333',
           textAlign: 'center'
         }}>
           <h3 style={{
-            fontSize: '24px',
+            fontSize: 'clamp(20px, 4vw, 24px)',
             fontWeight: 'bold',
             marginBottom: '15px'
           }}>
@@ -446,27 +511,44 @@ export default function FAQ() {
           <p style={{
             color: '#999',
             marginBottom: '25px',
-            fontSize: '16px'
+            fontSize: 'clamp(14px, 2.5vw, 16px)'
           }}>
             Can't find what you're looking for? Our support team is here to help.
           </p>
           <button
             onClick={() => navigate('/contact')}
             style={{
-              padding: '15px 40px',
+              padding: 'clamp(12px, 2.5vw, 15px) clamp(32px, 6vw, 40px)',
               backgroundColor: '#ff0000',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
               fontWeight: 'bold',
-              fontSize: '16px'
+              fontSize: 'clamp(15px, 3vw, 16px)',
+              maxWidth: '300px',
+              width: '100%'
             }}
           >
             Contact Support
           </button>
         </div>
       </div>
+
+      {/* Mobile Responsive Styles */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .desktop-nav {
+            display: none !important;
+          }
+          .mobile-menu-btn {
+            display: block !important;
+          }
+          .mobile-menu {
+            display: flex !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

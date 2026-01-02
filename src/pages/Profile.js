@@ -5,11 +5,14 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, updatePassword } from 'firebase/auth';
 import toast from 'react-hot-toast';
+import MyTeam from '../MyTeam';
 
 export default function Profile({ user, userData }) {
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -28,11 +31,46 @@ export default function Profile({ user, userData }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Force reload fresh user data on mount
+  useEffect(() => {
+    const loadFreshUserData = async () => {
+      if (!user?.uid) {
+        setLoadingData(false);
+        return;
+      }
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const freshData = userDoc.data();
+          setEmail(user.email || '');
+          setDisplayName(freshData.displayName || '');
+          setPhotoURL(user.photoURL || freshData.photoURL || '');
+          setBio(freshData.bio || '');
+          setSport(freshData.sport || '');
+          setOrganization(freshData.organization || '');
+          setPhone(freshData.phone || '');
+          setCoachCode(freshData.coachCode || '');
+          setInstagram(freshData.instagram || '');
+          setTwitter(freshData.twitter || '');
+          setTiktok(freshData.tiktok || '');
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    loadFreshUserData();
+  }, [user]);
+
+  // Backup: Also update from userData prop when it changes
   useEffect(() => {
     if (user && userData) {
       setEmail(user.email || '');
       setDisplayName(userData.displayName || '');
-      setPhotoURL(user.photoURL || '');
+      setPhotoURL(user.photoURL || userData.photoURL || '');
       setBio(userData.bio || '');
       setSport(userData.sport || '');
       setOrganization(userData.organization || '');
@@ -120,7 +158,85 @@ export default function Profile({ user, userData }) {
     }
   };
 
+  const copyCoachCode = () => {
+    navigator.clipboard.writeText(coachCode);
+    setCopied(true);
+    toast.success('Coach code copied to clipboard!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const generateMyCoachCode = async () => {
+    try {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      await updateDoc(doc(db, 'users', user.uid), {
+        coachCode: code
+      });
+
+      setCoachCode(code);
+      toast.success('Coach code generated!');
+    } catch (error) {
+      console.error('Error generating code:', error);
+      toast.error('Failed to generate code');
+    }
+  };
+
+  const handleRoleSwitch = async () => {
+    const newRole = isCoach ? 'athlete' : 'coach';
+    const confirmMessage = isCoach 
+      ? 'Are you sure you want to switch to an Athlete account? You will lose access to coach features and your subscription will be canceled.'
+      : 'Are you sure you want to switch to a Coach account? You will need to set up a subscription to access coach features.';
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        const updates = {
+          role: newRole,
+          updatedAt: new Date()
+        };
+
+        // If switching to coach and no coach code, generate one
+        if (newRole === 'coach' && !coachCode) {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          let code = '';
+          for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          updates.coachCode = code;
+        }
+
+        await updateDoc(doc(db, 'users', user.uid), updates);
+        
+        toast.success(`Account switched to ${newRole}!`);
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } catch (error) {
+        console.error('Error switching role:', error);
+        toast.error('Failed to switch account type');
+      }
+    }
+  };
+
   const isCoach = userData?.role === 'coach';
+
+  // Loading state
+  if (loadingData || !userData) {
+    return (
+      <div style={{ 
+        maxWidth: '900px', 
+        margin: '0 auto', 
+        padding: '40px 20px',
+        textAlign: 'center' 
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+        <p style={{ color: '#666' }}>Loading profile...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px' }}>
@@ -191,6 +307,82 @@ export default function Profile({ user, userData }) {
           </div>
         )}
       </div>
+
+      {/* COACH CODE SECTION - Prominent for coaches */}
+      {isCoach && (
+        <div style={{
+          backgroundColor: '#fff5f5',
+          border: '3px solid #ff0000',
+          padding: '30px',
+          borderRadius: '12px',
+          marginBottom: '30px',
+          boxShadow: '0 4px 12px rgba(255, 0, 0, 0.1)'
+        }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '12px', color: '#ff0000' }}>
+            🏆 Your Coach Code
+          </h2>
+          <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>
+            Share this code with athletes so they can connect with you
+          </p>
+          
+          {coachCode ? (
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+              <div style={{
+                flex: 1,
+                padding: '20px 30px',
+                backgroundColor: 'white',
+                border: '3px solid #ff0000',
+                borderRadius: '10px',
+                fontSize: '48px',
+                fontWeight: 'bold',
+                letterSpacing: '12px',
+                textAlign: 'center',
+                fontFamily: 'monospace',
+                color: '#ff0000'
+              }}>
+                {coachCode}
+              </div>
+              <button
+                onClick={copyCoachCode}
+                style={{
+                  padding: '20px 30px',
+                  backgroundColor: copied ? '#28a745' : '#ff0000',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  minWidth: '140px'
+                }}
+              >
+                {copied ? '✓ Copied!' : '📋 Copy Code'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={generateMyCoachCode}
+              style={{
+                width: '100%',
+                padding: '20px',
+                backgroundColor: '#ff0000',
+                color: 'white',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              🎲 Generate My Coach Code
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* MY TEAM SECTION - For coaches */}
+      {isCoach && <MyTeam user={user} userData={userData} />}
 
       <div style={{
         padding: '30px',
@@ -294,30 +486,6 @@ export default function Profile({ user, userData }) {
               {isCoach ? '🏆 Coach' : '⚡ Athlete'}
             </div>
           </div>
-
-          {isCoach && (
-            <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
-                Your Coach Code
-              </label>
-              <div style={{
-                padding: '12px',
-                fontSize: '20px',
-                fontWeight: 'bold',
-                color: '#ff0000',
-                backgroundColor: 'white',
-                border: '2px dashed #ff0000',
-                borderRadius: '6px',
-                textAlign: 'center',
-                letterSpacing: '2px'
-              }}>
-                {coachCode || 'Not assigned'}
-              </div>
-              <p style={{ fontSize: '12px', color: '#6c757d', marginTop: '5px' }}>
-                Share this code with athletes to connect with them
-              </p>
-            </div>
-          )}
 
           <div>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px' }}>
@@ -562,6 +730,45 @@ export default function Profile({ user, userData }) {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ACCOUNT TYPE SWITCHER */}
+      <div style={{
+        padding: '30px',
+        backgroundColor: '#fff3cd',
+        border: '2px solid #ffc107',
+        borderRadius: '12px',
+        marginBottom: '20px'
+      }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '15px', color: '#856404' }}>
+          🔄 Change Account Type
+        </h2>
+        <div style={{ marginBottom: '15px' }}>
+          <p style={{ color: '#856404', marginBottom: '10px' }}>
+            Current account type: <strong>{isCoach ? '🏆 Coach' : '⚡ Athlete'}</strong>
+          </p>
+          <p style={{ color: '#856404', fontSize: '14px', marginBottom: '0' }}>
+            {isCoach 
+              ? '⚠️ Warning: Switching to Athlete will remove access to coach features and cancel any active subscription.'
+              : '💡 Switching to Coach will allow you to review videos and manage athletes. You\'ll need to set up a subscription to access all features.'
+            }
+          </p>
+        </div>
+        <button
+          onClick={handleRoleSwitch}
+          style={{
+            padding: '12px 24px',
+            backgroundColor: '#ffc107',
+            color: '#000',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            fontSize: '16px'
+          }}
+        >
+          🔄 Switch to {isCoach ? 'Athlete' : 'Coach'}
+        </button>
       </div>
 
       <div style={{

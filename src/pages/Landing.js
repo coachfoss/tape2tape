@@ -7,6 +7,7 @@ export default function Landing() {
   const navigate = useNavigate();
   const [user] = useAuthState(auth);
   const [email, setEmail] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleGetStarted = () => {
     if (user) {
@@ -113,7 +114,7 @@ export default function Landing() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '20px 40px',
+        padding: 'clamp(16px, 3vw, 20px) clamp(20px, 5vw, 40px)',
         borderBottom: '1px solid rgba(255,255,255,0.1)',
         position: 'sticky',
         top: 0,
@@ -121,18 +122,114 @@ export default function Landing() {
         backdropFilter: 'blur(10px)',
         zIndex: 100
       }}>
-        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ff0000' }}>
+        <div style={{ fontSize: 'clamp(20px, 4vw, 24px)', fontWeight: 'bold', color: '#ff0000' }}>
           Tape2Tape
         </div>
-        <div style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
-          <a href="#features" style={{ color: 'white', textDecoration: 'none' }}>Features</a>
-          <a href="#pricing" style={{ color: 'white', textDecoration: 'none' }}>Pricing</a>
-          <a href="/faq" style={{ color: 'white', textDecoration: 'none' }}>FAQ</a>
-          <a href="/contact" style={{ color: 'white', textDecoration: 'none' }}>Contact</a>
+
+        {/* Desktop Navigation */}
+        <div className="desktop-nav" style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
+          <a href="#features" style={{ color: 'white', textDecoration: 'none', fontSize: '15px' }}>Features</a>
+          <a href="#pricing" style={{ color: 'white', textDecoration: 'none', fontSize: '15px' }}>Pricing</a>
+          <a href="/faq" style={{ color: 'white', textDecoration: 'none', fontSize: '15px' }}>FAQ</a>
+          <a href="/contact" style={{ color: 'white', textDecoration: 'none', fontSize: '15px' }}>Contact</a>
           <button
+            className="mobile-inline"
             onClick={() => user ? navigate('/dashboard') : navigate('/auth')}
             style={{
               padding: '10px 20px',
+              backgroundColor: 'transparent',
+              color: 'white',
+              border: '1px solid white',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '14px'
+            }}
+          >
+            {user ? 'Dashboard' : 'Log In'}
+          </button>
+          {!user && (
+            <button
+              className="mobile-inline"
+              onClick={() => navigate('/auth')}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#ff0000',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '14px'
+              }}
+            >
+              Get Started
+            </button>
+          )}
+        </div>
+
+        {/* Mobile Menu Button */}
+        <button
+          className="mobile-menu-btn"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{
+            display: 'none',
+            background: 'none',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: 'white',
+            fontSize: '24px',
+            cursor: 'pointer',
+            padding: '8px 12px',
+            borderRadius: '6px'
+          }}
+        >
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
+      </nav>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu" style={{
+          display: 'none',
+          flexDirection: 'column',
+          backgroundColor: 'rgba(10,10,10,0.98)',
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          padding: '20px',
+          gap: '16px'
+        }}>
+          <a 
+            href="#features" 
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ color: 'white', textDecoration: 'none', padding: '12px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.05)' }}
+          >
+            Features
+          </a>
+          <a 
+            href="#pricing" 
+            onClick={() => setMobileMenuOpen(false)}
+            style={{ color: 'white', textDecoration: 'none', padding: '12px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.05)' }}
+          >
+            Pricing
+          </a>
+          <a 
+            href="/faq" 
+            style={{ color: 'white', textDecoration: 'none', padding: '12px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.05)' }}
+          >
+            FAQ
+          </a>
+          <a 
+            href="/contact" 
+            style={{ color: 'white', textDecoration: 'none', padding: '12px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.05)' }}
+          >
+            Contact
+          </a>
+          <button
+            onClick={() => {
+              user ? navigate('/dashboard') : navigate('/auth');
+              setMobileMenuOpen(false);
+            }}
+            style={{
+              padding: '12px',
               backgroundColor: 'transparent',
               color: 'white',
               border: '1px solid white',
@@ -145,9 +242,12 @@ export default function Landing() {
           </button>
           {!user && (
             <button
-              onClick={() => navigate('/auth')}
+              onClick={() => {
+                navigate('/auth');
+                setMobileMenuOpen(false);
+              }}
               style={{
-                padding: '10px 20px',
+                padding: '12px',
                 backgroundColor: '#ff0000',
                 color: 'white',
                 border: 'none',
@@ -160,17 +260,17 @@ export default function Landing() {
             </button>
           )}
         </div>
-      </nav>
+      )}
 
       {/* Hero Section */}
       <section style={{
-        padding: '100px 40px',
+        padding: 'clamp(60px, 10vw, 100px) clamp(20px, 5vw, 40px)',
         textAlign: 'center',
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
         <h1 style={{
-          fontSize: '56px',
+          fontSize: 'clamp(32px, 8vw, 56px)',
           fontWeight: 'bold',
           marginBottom: '20px',
           lineHeight: '1.2'
@@ -179,11 +279,12 @@ export default function Landing() {
           <span style={{ color: '#ff0000' }}>Made Simple</span>
         </h1>
         <p style={{
-          fontSize: '20px',
+          fontSize: 'clamp(16px, 3vw, 20px)',
           color: '#999',
           marginBottom: '40px',
           maxWidth: '700px',
-          margin: '0 auto 40px'
+          margin: '0 auto 40px',
+          padding: '0 20px'
         }}>
           Draw on video, record your analysis, and help athletes improve faster. 
           Works perfectly on iPad, tablet, and desktop.
@@ -192,9 +293,13 @@ export default function Landing() {
         {/* Email Capture */}
         <div style={{
           display: 'flex',
-          gap: '10px',
+          flexDirection: 'column',
+          gap: '12px',
           justifyContent: 'center',
-          marginBottom: '20px'
+          marginBottom: '20px',
+          maxWidth: '500px',
+          margin: '0 auto 20px',
+          padding: '0 20px'
         }}>
           <input
             type="email"
@@ -208,7 +313,7 @@ export default function Landing() {
               border: '1px solid rgba(255,255,255,0.2)',
               backgroundColor: 'rgba(255,255,255,0.05)',
               color: 'white',
-              width: '300px',
+              width: '100%',
               outline: 'none'
             }}
           />
@@ -222,36 +327,37 @@ export default function Landing() {
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              width: '100%'
             }}
           >
             Start Free Trial
           </button>
         </div>
-        <p style={{ fontSize: '14px', color: '#666' }}>
+        <p style={{ fontSize: '14px', color: '#666', padding: '0 20px' }}>
           No credit card required • 3 free reviews to start
         </p>
 
         {/* Demo Video Placeholder */}
         <div style={{
-          marginTop: '60px',
+          marginTop: 'clamp(40px, 8vw, 60px)',
           borderRadius: '12px',
           overflow: 'hidden',
           border: '2px solid rgba(255,255,255,0.1)',
           backgroundColor: '#111',
           aspectRatio: '16/9',
           maxWidth: '900px',
-          margin: '60px auto 0',
+          margin: 'clamp(40px, 8vw, 60px) auto 0',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
         }}>
-          <div style={{ textAlign: 'center', padding: '40px' }}>
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>🎥</div>
-            <p style={{ fontSize: '18px', color: '#999' }}>
+          <div style={{ textAlign: 'center', padding: 'clamp(20px, 5vw, 40px)' }}>
+            <div style={{ fontSize: 'clamp(32px, 8vw, 48px)', marginBottom: '20px' }}>🎥</div>
+            <p style={{ fontSize: 'clamp(14px, 3vw, 18px)', color: '#999' }}>
               Demo Video Coming Soon
             </p>
-            <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
+            <p style={{ fontSize: 'clamp(12px, 2.5vw, 14px)', color: '#666', marginTop: '10px' }}>
               Watch a 60-second walkthrough of Tape2Tape in action
             </p>
           </div>
@@ -260,43 +366,53 @@ export default function Landing() {
 
       {/* Features Section */}
       <section id="features" style={{
-        padding: '100px 40px',
+        padding: 'clamp(60px, 10vw, 100px) clamp(20px, 5vw, 40px)',
         backgroundColor: '#0a0a0a',
         borderTop: '1px solid rgba(255,255,255,0.1)',
         borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <h2 style={{
-            fontSize: '42px',
+            fontSize: 'clamp(28px, 6vw, 42px)',
             fontWeight: 'bold',
             textAlign: 'center',
-            marginBottom: '60px'
+            marginBottom: 'clamp(40px, 8vw, 60px)'
           }}>
             Everything You Need to Coach Better
           </h2>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
-            gap: '40px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+            gap: 'clamp(20px, 4vw, 40px)'
           }}>
             {features.map((feature, index) => (
               <div key={index} style={{
-                padding: '30px',
+                padding: 'clamp(20px, 4vw, 30px)',
                 backgroundColor: 'rgba(255,255,255,0.02)',
                 borderRadius: '12px',
-                border: '1px solid rgba(255,255,255,0.05)'
-              }}>
-                <div style={{ fontSize: '36px', marginBottom: '15px' }}>
+                border: '1px solid rgba(255,255,255,0.05)',
+                transition: 'transform 0.2s, box-shadow 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+              >
+                <div style={{ fontSize: 'clamp(28px, 6vw, 36px)', marginBottom: '15px' }}>
                   {feature.icon}
                 </div>
                 <h3 style={{
-                  fontSize: '20px',
+                  fontSize: 'clamp(18px, 3.5vw, 20px)',
                   fontWeight: 'bold',
                   marginBottom: '10px'
                 }}>
                   {feature.title}
                 </h3>
-                <p style={{ color: '#999', lineHeight: '1.6' }}>
+                <p style={{ color: '#999', lineHeight: '1.6', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>
                   {feature.description}
                 </p>
               </div>
@@ -307,125 +423,87 @@ export default function Landing() {
 
       {/* Getting Started Guide */}
       <section style={{
-        padding: '100px 40px',
+        padding: 'clamp(60px, 10vw, 100px) clamp(20px, 5vw, 40px)',
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
         <h2 style={{
-          fontSize: '42px',
+          fontSize: 'clamp(28px, 6vw, 42px)',
           fontWeight: 'bold',
           textAlign: 'center',
-          marginBottom: '60px'
+          marginBottom: 'clamp(40px, 8vw, 60px)'
         }}>
           Get Started in 3 Simple Steps
         </h2>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '40px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))',
+          gap: 'clamp(30px, 6vw, 40px)'
         }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              backgroundColor: '#ff0000',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              margin: '0 auto 20px'
-            }}>
-              1
+          {[
+            { step: '1', title: 'Upload Video', desc: 'Drag and drop or select video files from your device. Supports all common formats.' },
+            { step: '2', title: 'Analyze & Annotate', desc: 'Use drawing tools to highlight technique. Record your voice while you analyze.' },
+            { step: '3', title: 'Share with Athletes', desc: 'Send review links instantly. Athletes can watch on any device, anytime.' }
+          ].map((item, idx) => (
+            <div key={idx} style={{ textAlign: 'center' }}>
+              <div style={{
+                width: 'clamp(50px, 10vw, 60px)',
+                height: 'clamp(50px, 10vw, 60px)',
+                backgroundColor: '#ff0000',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 'clamp(20px, 4vw, 24px)',
+                fontWeight: 'bold',
+                margin: '0 auto 20px'
+              }}>
+                {item.step}
+              </div>
+              <h3 style={{ fontSize: 'clamp(18px, 3.5vw, 22px)', fontWeight: 'bold', marginBottom: '10px' }}>
+                {item.title}
+              </h3>
+              <p style={{ color: '#999', lineHeight: '1.6', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>
+                {item.desc}
+              </p>
             </div>
-            <h3 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '10px' }}>
-              Upload Video
-            </h3>
-            <p style={{ color: '#999', lineHeight: '1.6' }}>
-              Drag and drop or select video files from your device. Supports all common formats.
-            </p>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              backgroundColor: '#ff0000',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              margin: '0 auto 20px'
-            }}>
-              2
-            </div>
-            <h3 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '10px' }}>
-              Analyze & Annotate
-            </h3>
-            <p style={{ color: '#999', lineHeight: '1.6' }}>
-              Use drawing tools to highlight technique. Record your voice while you analyze.
-            </p>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              backgroundColor: '#ff0000',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '24px',
-              fontWeight: 'bold',
-              margin: '0 auto 20px'
-            }}>
-              3
-            </div>
-            <h3 style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: '10px' }}>
-              Share with Athletes
-            </h3>
-            <p style={{ color: '#999', lineHeight: '1.6' }}>
-              Send review links instantly. Athletes can watch on any device, anytime.
-            </p>
-          </div>
+          ))}
         </div>
       </section>
 
       {/* Testimonials */}
       <section style={{
-        padding: '100px 40px',
+        padding: 'clamp(60px, 10vw, 100px) clamp(20px, 5vw, 40px)',
         backgroundColor: '#0a0a0a',
         borderTop: '1px solid rgba(255,255,255,0.1)',
         borderBottom: '1px solid rgba(255,255,255,0.1)'
       }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <h2 style={{
-            fontSize: '42px',
+            fontSize: 'clamp(28px, 6vw, 42px)',
             fontWeight: 'bold',
             textAlign: 'center',
-            marginBottom: '60px'
+            marginBottom: 'clamp(40px, 8vw, 60px)'
           }}>
             Loved by Coaches
           </h2>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-            gap: '30px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+            gap: 'clamp(20px, 4vw, 30px)'
           }}>
             {testimonials.map((testimonial, index) => (
               <div key={index} style={{
-                padding: '30px',
+                padding: 'clamp(20px, 4vw, 30px)',
                 backgroundColor: 'rgba(255,255,255,0.02)',
                 borderRadius: '12px',
                 border: '1px solid rgba(255,255,255,0.05)'
               }}>
-                <div style={{ fontSize: '40px', marginBottom: '15px' }}>
+                <div style={{ fontSize: 'clamp(32px, 6vw, 40px)', marginBottom: '15px' }}>
                   {testimonial.avatar}
                 </div>
                 <p style={{
-                  fontSize: '16px',
+                  fontSize: 'clamp(14px, 2.5vw, 16px)',
                   lineHeight: '1.6',
                   marginBottom: '20px',
                   color: '#ccc'
@@ -433,8 +511,8 @@ export default function Landing() {
                   "{testimonial.text}"
                 </p>
                 <div>
-                  <div style={{ fontWeight: 'bold' }}>{testimonial.name}</div>
-                  <div style={{ fontSize: '14px', color: '#666' }}>{testimonial.role}</div>
+                  <div style={{ fontWeight: 'bold', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>{testimonial.name}</div>
+                  <div style={{ fontSize: 'clamp(12px, 2vw, 14px)', color: '#666' }}>{testimonial.role}</div>
                 </div>
               </div>
             ))}
@@ -444,12 +522,12 @@ export default function Landing() {
 
       {/* Pricing Section */}
       <section id="pricing" style={{
-        padding: '100px 40px',
+        padding: 'clamp(60px, 10vw, 100px) clamp(20px, 5vw, 40px)',
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
         <h2 style={{
-          fontSize: '42px',
+          fontSize: 'clamp(28px, 6vw, 42px)',
           fontWeight: 'bold',
           textAlign: 'center',
           marginBottom: '20px'
@@ -458,25 +536,25 @@ export default function Landing() {
         </h2>
         <p style={{
           textAlign: 'center',
-          fontSize: '18px',
+          fontSize: 'clamp(16px, 3vw, 18px)',
           color: '#999',
-          marginBottom: '60px'
+          marginBottom: 'clamp(40px, 8vw, 60px)'
         }}>
           Start free, upgrade when you're ready
         </p>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '30px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+          gap: 'clamp(20px, 4vw, 30px)'
         }}>
           {pricingPlans.map((plan, index) => (
             <div key={index} style={{
-              padding: '40px',
+              padding: 'clamp(30px, 6vw, 40px)',
               backgroundColor: plan.highlighted ? 'rgba(255,0,0,0.05)' : 'rgba(255,255,255,0.02)',
               borderRadius: '12px',
               border: plan.highlighted ? '2px solid #ff0000' : '1px solid rgba(255,255,255,0.05)',
               position: 'relative',
-              transform: plan.highlighted ? 'scale(1.05)' : 'scale(1)',
+              transform: plan.highlighted ? 'scale(1.02)' : 'scale(1)',
               transition: 'transform 0.3s ease'
             }}>
               {plan.badge && (
@@ -489,24 +567,25 @@ export default function Landing() {
                   color: 'white',
                   padding: '4px 16px',
                   borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
+                  fontSize: 'clamp(10px, 2vw, 12px)',
+                  fontWeight: 'bold',
+                  whiteSpace: 'nowrap'
                 }}>
                   {plan.badge}
                 </div>
               )}
               <h3 style={{
-                fontSize: '24px',
+                fontSize: 'clamp(20px, 4vw, 24px)',
                 fontWeight: 'bold',
                 marginBottom: '10px'
               }}>
                 {plan.name}
               </h3>
               <div style={{ marginBottom: '20px' }}>
-                <span style={{ fontSize: '42px', fontWeight: 'bold' }}>
+                <span style={{ fontSize: 'clamp(32px, 6vw, 42px)', fontWeight: 'bold' }}>
                   {plan.price}
                 </span>
-                <span style={{ color: '#666', marginLeft: '8px' }}>
+                <span style={{ color: '#666', marginLeft: '8px', fontSize: 'clamp(12px, 2.5vw, 14px)' }}>
                   {plan.period}
                 </span>
               </div>
@@ -519,7 +598,8 @@ export default function Landing() {
                   <li key={fIndex} style={{
                     padding: '10px 0',
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    color: '#ccc'
+                    color: '#ccc',
+                    fontSize: 'clamp(13px, 2.5vw, 15px)'
                   }}>
                     ✓ {feature}
                   </li>
@@ -544,7 +624,7 @@ export default function Landing() {
                   borderRadius: '8px',
                   cursor: 'pointer',
                   fontWeight: 'bold',
-                  fontSize: '16px'
+                  fontSize: 'clamp(14px, 2.5vw, 16px)'
                 }}
               >
                 {plan.cta}
@@ -556,50 +636,53 @@ export default function Landing() {
 
       {/* Final CTA */}
       <section style={{
-        padding: '100px 40px',
+        padding: 'clamp(60px, 10vw, 100px) clamp(20px, 5vw, 40px)',
         textAlign: 'center',
         backgroundColor: '#0a0a0a',
         borderTop: '1px solid rgba(255,255,255,0.1)'
       }}>
         <h2 style={{
-          fontSize: '42px',
+          fontSize: 'clamp(28px, 6vw, 42px)',
           fontWeight: 'bold',
           marginBottom: '20px'
         }}>
           Ready to Transform Your Coaching?
         </h2>
         <p style={{
-          fontSize: '18px',
+          fontSize: 'clamp(16px, 3vw, 18px)',
           color: '#999',
           marginBottom: '40px',
           maxWidth: '600px',
-          margin: '0 auto 40px'
+          margin: '0 auto 40px',
+          padding: '0 20px'
         }}>
           Join hundreds of coaches using Tape2Tape to help athletes reach their potential
         </p>
         <button
           onClick={() => user ? navigate('/subscription') : navigate('/auth')}
           style={{
-            padding: '20px 50px',
-            fontSize: '18px',
+            padding: 'clamp(16px, 3vw, 20px) clamp(40px, 8vw, 50px)',
+            fontSize: 'clamp(16px, 3vw, 18px)',
             backgroundColor: '#ff0000',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            maxWidth: '400px',
+            width: '100%'
           }}
         >
           Start Your Free Trial
         </button>
-        <p style={{ fontSize: '14px', color: '#666', marginTop: '20px' }}>
+        <p style={{ fontSize: 'clamp(12px, 2.5vw, 14px)', color: '#666', marginTop: '20px' }}>
           No credit card required
         </p>
       </section>
 
       {/* Footer */}
       <footer style={{
-        padding: '60px 40px 40px',
+        padding: 'clamp(40px, 8vw, 60px) clamp(20px, 5vw, 40px) clamp(30px, 6vw, 40px)',
         borderTop: '1px solid rgba(255,255,255,0.1)',
         backgroundColor: '#000'
       }}>
@@ -607,58 +690,83 @@ export default function Landing() {
           maxWidth: '1200px',
           margin: '0 auto',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '40px',
-          marginBottom: '40px'
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+          gap: 'clamp(30px, 6vw, 40px)',
+          marginBottom: 'clamp(30px, 6vw, 40px)'
         }}>
           <div>
             <div style={{
-              fontSize: '20px',
+              fontSize: 'clamp(18px, 3.5vw, 20px)',
               fontWeight: 'bold',
               color: '#ff0000',
               marginBottom: '15px'
             }}>
               Tape2Tape
             </div>
-            <p style={{ color: '#666', fontSize: '14px' }}>
+            <p style={{ color: '#666', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>
               Video analysis tools built for coaches who want to make a real impact.
             </p>
           </div>
           <div>
-            <h4 style={{ marginBottom: '15px', fontSize: '16px' }}>Product</h4>
+            <h4 style={{ marginBottom: '15px', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>Product</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <a href="#features" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Features</a>
-              <a href="#pricing" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Pricing</a>
-              <a href="/faq" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>FAQ</a>
+              <a href="#features" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Features</a>
+              <a href="#pricing" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Pricing</a>
+              <a href="/faq" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>FAQ</a>
             </div>
           </div>
           <div>
-            <h4 style={{ marginBottom: '15px', fontSize: '16px' }}>Company</h4>
+            <h4 style={{ marginBottom: '15px', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>Company</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <a href="/contact" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Contact</a>
-              <a href="/terms" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Terms of Service</a>
-              <a href="/privacy" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Privacy Policy</a>
+              <a href="/contact" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Contact</a>
+              <a href="/terms" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Terms of Service</a>
+              <a href="/privacy" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Privacy Policy</a>
             </div>
           </div>
           <div>
-            <h4 style={{ marginBottom: '15px', fontSize: '16px' }}>Connect</h4>
+            <h4 style={{ marginBottom: '15px', fontSize: 'clamp(14px, 2.5vw, 16px)' }}>Connect</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <a href="https://twitter.com/tape2tape" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Twitter</a>
-              <a href="https://instagram.com/tape2tape" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Instagram</a>
-              <a href="mailto:support@tape2tape.com" style={{ color: '#999', textDecoration: 'none', fontSize: '14px' }}>Email</a>
+              <a href="https://twitter.com/tape2tape" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Twitter</a>
+              <a href="https://instagram.com/tape2tape" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Instagram</a>
+              <a href="mailto:support@tape2tape.com" style={{ color: '#999', textDecoration: 'none', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Email</a>
             </div>
           </div>
         </div>
         <div style={{
           textAlign: 'center',
-          paddingTop: '40px',
+          paddingTop: 'clamp(30px, 6vw, 40px)',
           borderTop: '1px solid rgba(255,255,255,0.05)',
           color: '#666',
-          fontSize: '14px'
+          fontSize: 'clamp(12px, 2.5vw, 14px)'
         }}>
           © 2025 Tape2Tape. All rights reserved.
         </div>
       </footer>
+
+      {/* Mobile Responsive Styles */}
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .desktop-nav {
+            display: none !important;
+          }
+          .mobile-menu-btn {
+            display: block !important;
+          }
+          .mobile-menu {
+            display: flex !important;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .mobile-menu {
+            display: none !important;
+          }
+          
+          .email-capture {
+            flex-direction: row !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

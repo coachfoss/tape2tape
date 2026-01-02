@@ -1,356 +1,534 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp, getDoc, doc, updateDoc, increment } from 'firebase/firestore';
 import { storage, db } from './firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
 export default function VideoUpload({ user, userData }) {
   const navigate = useNavigate();
-  const [file, setFile] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [videoPreview, setVideoPreview] = useState(null);
   const [selectedCoachId, setSelectedCoachId] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [coaches, setCoaches] = useState([]);
+  const [loadingCoaches, setLoadingCoaches] = useState(true);
+  const [dragActive, setDragActive] = useState(false);
 
   const isCoach = userData?.role === 'coach';
-  const isAthlete = userData?.role === 'athlete';
 
+  // Load coaches for athletes
   useEffect(() => {
-    if (isAthlete) {
-      loadConnectedCoaches();
-    }
-  }, [isAthlete, userData]);
+    const loadCoaches = async () => {
+      if (isCoach || !userData?.myCoaches || userData.myCoaches.length === 0) {
+        setLoadingCoaches(false);
+        return;
+      }
 
-  const loadConnectedCoaches = async () => {
-    if (!userData?.connectedCoaches || userData.connectedCoaches.length === 0) {
-      setCoaches([]);
-      return;
-    }
+      try {
+        const coachPromises = userData.myCoaches.map(coachId =>
+          getDoc(doc(db, 'users', coachId))
+        );
 
-    try {
-      const coachesData = [];
-      for (const coachId of userData.connectedCoaches) {
-        const coachDoc = await getDoc(doc(db, 'users', coachId));
-        if (coachDoc.exists()) {
-          coachesData.push({ id: coachDoc.id, ...coachDoc.data() });
+        const coachDocs = await Promise.all(coachPromises);
+        const coachData = coachDocs
+          .filter(doc => doc.exists())
+          .map(doc => ({ id: doc.id, ...doc.data() }));
+
+        setCoaches(coachData);
+        
+        // Auto-select first coach if only one
+        if (coachData.length === 1) {
+          setSelectedCoachId(coachData[0].id);
         }
+      } catch (error) {
+        console.error('Error loading coaches:', error);
+      } finally {
+        setLoadingCoaches(false);
       }
-      setCoaches(coachesData);
-      if (coachesData.length > 0) {
-        setSelectedCoachId(coachesData[0].id);
-      }
-    } catch (error) {
-      console.error('Error loading coaches:', error);
-    }
-  };
+    };
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      if (selectedFile.type.startsWith('video/')) {
-        setFile(selectedFile);
-        const url = URL.createObjectURL(selectedFile);
-        setVideoPreview(url);
-      } else {
-        toast.error('Please select a video file');
-      }
+    loadCoaches();
+  }, [userData, isCoach]);
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
     }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.type.startsWith('video/')) {
-      setFile(droppedFile);
-      const url = URL.createObjectURL(droppedFile);
-      setVideoPreview(url);
-    } else {
-      toast.error('Please drop a video file');
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('video/')) {
+        setVideoFile(file);
+        if (!title) {
+          setTitle(file.name.replace(/\.[^/.]+$/, ""));
+        }
+      } else {
+        toast.error('Please upload a video file');
+      }
     }
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setVideoFile(file);
+      if (!title) {
+        setTitle(file.name.replace(/\.[^/.]+$/, ""));
+      }
+    }
   };
 
-  const handleUpload = async () => {
-    if (!file) {
+  const handleUpload = async (e) => {
+    e.preventDefault();
+
+    if (!videoFile) {
       toast.error('Please select a video file');
       return;
     }
 
     if (!title.trim()) {
-      toast.error('Please enter a title');
+      toast.error('Please enter a video title');
       return;
     }
 
-    if (isAthlete && !selectedCoachId) {
+    // Athletes must select a coach
+    if (!isCoach && !selectedCoachId) {
       toast.error('Please select a coach');
       return;
     }
 
-    if (isCoach) {
-      const canUpload = userData?.subscriptionStatus === 'active' || (userData?.freeReviewsRemaining > 0);
-      if (!canUpload) {
-        toast.error('Subscribe or use your free reviews to upload videos');
-        navigate('/subscription');
-        return;
-      }
-    }
-
     setUploading(true);
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${videoFile.name}`;
+    const storageRef = ref(storage, `videos/${fileName}`);
+    const uploadTask = uploadBytesResumable(storageRef, videoFile);
 
-    try {
-      const videoRef = ref(storage, `videos/${user.uid}/${Date.now()}_${file.name}`);
-      const uploadTask = uploadBytesResumable(videoRef, file);
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const prog = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-          setProgress(prog);
-        },
-        (error) => {
-          console.error('Upload error:', error);
-          toast.error('Failed to upload video');
-          setUploading(false);
-        },
-        async () => {
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(Math.round(progress));
+      },
+      (error) => {
+        console.error('Upload error:', error);
+        toast.error('Upload failed. Please try again.');
+        setUploading(false);
+      },
+      async () => {
+        try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
           const videoData = {
-            title: title,
-            description: description,
-            videoURL: downloadURL,
-            uploadedBy: user.uid,
+            name: title,
+            description: description || '',
+            url: downloadURL,
+            fileName: fileName,
+            athleteId: isCoach ? null : user.uid,
+            athleteName: isCoach ? null : userData.displayName || user.email,
             coachId: isCoach ? user.uid : selectedCoachId,
-            athleteId: isAthlete ? user.uid : null,
-            createdAt: serverTimestamp(),
-            status: 'pending'
+            coachName: isCoach 
+              ? userData.displayName || user.email 
+              : coaches.find(c => c.id === selectedCoachId)?.displayName || 'Coach',
+            uploadedAt: serverTimestamp(),
+            reviewed: false,
+            fileSize: videoFile.size,
+            duration: null
           };
 
-          const docRef = await addDoc(collection(db, 'videos'), videoData);
-
-          if (isCoach && userData?.freeReviewsRemaining > 0 && userData?.subscriptionStatus !== 'active') {
-            await updateDoc(doc(db, 'users', user.uid), {
-              freeReviewsRemaining: increment(-1)
-            });
-          }
+          await addDoc(collection(db, 'videos'), videoData);
 
           toast.success('Video uploaded successfully!');
           navigate('/dashboard');
+        } catch (error) {
+          console.error('Error saving video data:', error);
+          toast.error('Failed to save video information');
+        } finally {
+          setUploading(false);
         }
-      );
-    } catch (error) {
-      console.error('Error uploading video:', error);
-      toast.error('Failed to upload video');
-      setUploading(false);
-    }
+      }
+    );
   };
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 20px' }}>
-      <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '10px' }}>
-        Upload a Video
-      </h1>
-      <p style={{ color: '#666', marginBottom: '30px' }}>
-        {isCoach && 'Upload a video to review for your athletes'}
-        {isAthlete && 'Upload a video for your coach to review'}
-      </p>
-
-      {/* Athlete Coach Selection */}
-      {isAthlete && (
-        <div style={{ marginBottom: '30px' }}>
-          <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-            Select Coach
-          </label>
-          {coaches.length === 0 ? (
-            <div style={{
-              padding: '20px',
-              backgroundColor: '#fff3cd',
-              border: '1px solid #ffc107',
-              borderRadius: '8px',
-              marginBottom: '20px'
-            }}>
-              <p style={{ color: '#856404', marginBottom: '10px' }}>
-                You haven't connected with any coaches yet.
-              </p>
-              <button
-                onClick={() => navigate('/dashboard')}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#ffc107',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                Connect with a Coach
-              </button>
-            </div>
-          ) : (
-            <select
-              value={selectedCoachId}
-              onChange={(e) => setSelectedCoachId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                border: '1px solid #dee2e6',
-                borderRadius: '6px',
-                fontSize: '16px'
-              }}
-            >
-              {coaches.map(coach => (
-                <option key={coach.id} value={coach.id}>
-                  {coach.displayName} - {coach.sport || 'Coach'}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      )}
-
-      {/* File Upload */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        style={{
-          border: '2px dashed #dee2e6',
-          borderRadius: '8px',
-          padding: '40px',
-          textAlign: 'center',
-          marginBottom: '20px',
-          backgroundColor: '#f8f9fa'
-        }}
-      >
-        <p style={{ marginBottom: '20px', color: '#666' }}>Drag and drop video here</p>
-        <input
-          type="file"
-          accept="video/*"
-          onChange={handleFileChange}
-          style={{ display: 'none' }}
-          id="video-upload"
-        />
-        <label
-          htmlFor="video-upload"
-          style={{
-            padding: '12px 24px',
-            backgroundColor: '#ff0000',
-            color: 'white',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            display: 'inline-block'
-          }}
-        >
-          Choose File
-        </label>
-        {file && <p style={{ marginTop: '20px', color: '#28a745', fontWeight: 'bold' }}>{file.name}</p>}
+    <div style={{ 
+      maxWidth: '900px', 
+      margin: '0 auto', 
+      padding: 'clamp(20px, 4vw, 40px)',
+      minHeight: '100vh'
+    }}>
+      {/* Header */}
+      <div style={{ marginBottom: 'clamp(32px, 6vw, 40px)' }}>
+        <h1 style={{ 
+          fontSize: 'clamp(28px, 6vw, 36px)', 
+          fontWeight: 'bold', 
+          marginBottom: '12px',
+          color: 'white'
+        }}>
+          Upload a Video
+        </h1>
+        <p style={{ 
+          fontSize: 'clamp(14px, 2.5vw, 16px)', 
+          color: '#999',
+          margin: 0
+        }}>
+          {isCoach 
+            ? 'Upload a video to review and analyze' 
+            : 'Upload a video for your coach to review'}
+        </p>
       </div>
 
-      {/* Video Preview */}
-      {videoPreview && (
-        <div style={{ marginBottom: '20px' }}>
-          <video
-            src={videoPreview}
-            controls
+      <form onSubmit={handleUpload}>
+        {/* Coach Selection - Athletes Only */}
+        {!isCoach && (
+          <div style={{
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            padding: 'clamp(20px, 4vw, 24px)',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: 'clamp(20px, 4vw, 24px)'
+          }}>
+            <h3 style={{ 
+              fontSize: 'clamp(16px, 3vw, 18px)', 
+              fontWeight: '600',
+              marginTop: 0,
+              marginBottom: '16px',
+              color: 'white'
+            }}>
+              Select Coach
+            </h3>
+
+            {loadingCoaches ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                <div className="spinner" style={{ margin: '0 auto' }}></div>
+                <p style={{ marginTop: '12px', fontSize: 'clamp(13px, 2.5vw, 14px)' }}>Loading coaches...</p>
+              </div>
+            ) : coaches.length === 0 ? (
+              <div style={{
+                backgroundColor: '#fff3cd',
+                border: '2px solid #ffc107',
+                padding: 'clamp(16px, 3vw, 20px)',
+                borderRadius: '8px',
+                color: '#856404'
+              }}>
+                <p style={{ 
+                  margin: '0 0 12px 0',
+                  fontSize: 'clamp(14px, 2.5vw, 15px)',
+                  fontWeight: '500'
+                }}>
+                  You haven't connected with any coaches yet.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/dashboard')}
+                  style={{
+                    padding: 'clamp(10px, 2vw, 12px) clamp(20px, 4vw, 24px)',
+                    backgroundColor: '#ffc107',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: 'clamp(13px, 2.5vw, 14px)'
+                  }}
+                >
+                  Connect with a Coach
+                </button>
+              </div>
+            ) : (
+              <select
+                value={selectedCoachId}
+                onChange={(e) => setSelectedCoachId(e.target.value)}
+                required
+                style={{
+                  width: '100%',
+                  padding: 'clamp(12px, 2.5vw, 14px)',
+                  backgroundColor: '#000',
+                  border: '2px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'white',
+                  fontSize: 'clamp(14px, 2.5vw, 16px)',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                <option value="" style={{ backgroundColor: '#000', color: 'white' }}>
+                  -- Select a Coach --
+                </option>
+                {coaches.map(coach => (
+                  <option 
+                    key={coach.id} 
+                    value={coach.id}
+                    style={{ backgroundColor: '#000', color: 'white' }}
+                  >
+                    {coach.displayName || coach.email} {coach.coachCode ? `(${coach.coachCode})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
+        {/* File Upload Area */}
+        <div style={{
+          backgroundColor: 'rgba(255,255,255,0.02)',
+          padding: 'clamp(20px, 4vw, 24px)',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.1)',
+          marginBottom: 'clamp(20px, 4vw, 24px)'
+        }}>
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            style={{
+              backgroundColor: dragActive ? 'rgba(255,0,0,0.1)' : '#000',
+              border: `3px dashed ${dragActive ? '#ff0000' : 'rgba(255,255,255,0.2)'}`,
+              borderRadius: '12px',
+              padding: 'clamp(40px, 8vw, 60px) clamp(20px, 4vw, 40px)',
+              textAlign: 'center',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer'
+            }}
+            onClick={() => document.getElementById('fileInput').click()}
+          >
+            {videoFile ? (
+              <div>
+                <div style={{ fontSize: 'clamp(40px, 8vw, 48px)', marginBottom: '16px' }}>✅</div>
+                <p style={{ 
+                  fontSize: 'clamp(16px, 3vw, 18px)', 
+                  fontWeight: '600',
+                  marginBottom: '8px',
+                  color: 'white'
+                }}>
+                  {videoFile.name}
+                </p>
+                <p style={{ 
+                  fontSize: 'clamp(13px, 2.5vw, 14px)', 
+                  color: '#999',
+                  marginBottom: '16px'
+                }}>
+                  {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVideoFile(null);
+                  }}
+                  style={{
+                    padding: 'clamp(8px, 2vw, 10px) clamp(16px, 3vw, 20px)',
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: 'clamp(13px, 2.5vw, 14px)',
+                    fontWeight: '500'
+                  }}
+                >
+                  Choose Different File
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 'clamp(40px, 8vw, 48px)', marginBottom: '16px' }}>📹</div>
+                <p style={{ 
+                  fontSize: 'clamp(16px, 3vw, 18px)', 
+                  color: 'white',
+                  marginBottom: '8px'
+                }}>
+                  Drag and drop video here
+                </p>
+                <p style={{ 
+                  fontSize: 'clamp(13px, 2.5vw, 14px)', 
+                  color: '#999',
+                  marginBottom: '20px'
+                }}>
+                  or
+                </p>
+                <button
+                  type="button"
+                  style={{
+                    padding: 'clamp(12px, 2.5vw, 14px) clamp(28px, 6vw, 36px)',
+                    backgroundColor: '#ff0000',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontSize: 'clamp(14px, 2.5vw, 16px)'
+                  }}
+                >
+                  Choose File
+                </button>
+              </div>
+            )}
+            <input
+              id="fileInput"
+              type="file"
+              accept="video/*"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+          </div>
+        </div>
+
+        {/* Title Input */}
+        <div style={{
+          backgroundColor: 'rgba(255,255,255,0.02)',
+          padding: 'clamp(20px, 4vw, 24px)',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.1)',
+          marginBottom: 'clamp(20px, 4vw, 24px)'
+        }}>
+          <label style={{
+            display: 'block',
+            marginBottom: '12px',
+            fontWeight: '600',
+            fontSize: 'clamp(14px, 2.5vw, 16px)',
+            color: 'white'
+          }}>
+            Title *
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter video title"
+            required
             style={{
               width: '100%',
-              maxWidth: '400px',
+              padding: 'clamp(12px, 2.5vw, 14px)',
+              backgroundColor: '#000',
+              border: '2px solid rgba(255,255,255,0.2)',
               borderRadius: '8px',
-              border: '1px solid #dee2e6'
+              color: 'white',
+              fontSize: 'clamp(14px, 2.5vw, 16px)',
+              outline: 'none'
             }}
           />
         </div>
-      )}
 
-      {/* Title */}
-      <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-          Title
-        </label>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Enter video title"
-          style={{
-            width: '100%',
-            padding: '12px',
-            border: '1px solid #dee2e6',
-            borderRadius: '6px',
-            fontSize: '16px'
-          }}
-        />
-      </div>
-
-      {/* Description */}
-      <div style={{ marginBottom: '30px' }}>
-        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-          Description (Optional)
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Enter video description"
-          rows={4}
-          style={{
-            width: '100%',
-            padding: '12px',
-            border: '1px solid #dee2e6',
-            borderRadius: '6px',
-            fontSize: '16px',
-            resize: 'vertical',
-            fontFamily: 'inherit'
-          }}
-        />
-      </div>
-
-      {/* Upload Progress */}
-      {uploading && (
-        <div style={{ marginBottom: '20px' }}>
-          <p style={{ marginBottom: '10px' }}>Progress: {progress}%</p>
-          <div style={{
-            width: '100%',
-            height: '20px',
-            backgroundColor: '#e9ecef',
-            borderRadius: '10px',
-            overflow: 'hidden'
+        {/* Description Input */}
+        <div style={{
+          backgroundColor: 'rgba(255,255,255,0.02)',
+          padding: 'clamp(20px, 4vw, 24px)',
+          borderRadius: '12px',
+          border: '1px solid rgba(255,255,255,0.1)',
+          marginBottom: 'clamp(24px, 5vw, 32px)'
+        }}>
+          <label style={{
+            display: 'block',
+            marginBottom: '12px',
+            fontWeight: '600',
+            fontSize: 'clamp(14px, 2.5vw, 16px)',
+            color: 'white'
           }}>
-            <div style={{
-              width: `${progress}%`,
-              height: '100%',
-              backgroundColor: '#ff0000',
-              transition: 'width 0.3s'
-            }} />
-          </div>
+            Description (Optional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Enter video description"
+            rows={4}
+            style={{
+              width: '100%',
+              padding: 'clamp(12px, 2.5vw, 14px)',
+              backgroundColor: '#000',
+              border: '2px solid rgba(255,255,255,0.2)',
+              borderRadius: '8px',
+              color: 'white',
+              fontSize: 'clamp(14px, 2.5vw, 16px)',
+              outline: 'none',
+              resize: 'vertical',
+              fontFamily: 'inherit'
+            }}
+          />
         </div>
-      )}
 
-      {/* Upload Button */}
-      <button
-        onClick={handleUpload}
-        disabled={uploading || !file || (isAthlete && coaches.length === 0)}
-        style={{
-          padding: '15px 30px',
-          backgroundColor: '#ff0000',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          cursor: (uploading || !file || (isAthlete && coaches.length === 0)) ? 'not-allowed' : 'pointer',
-          opacity: (uploading || !file || (isAthlete && coaches.length === 0)) ? 0.5 : 1
-        }}
-      >
-        {uploading ? 'Uploading...' : 'Upload'}
-      </button>
+        {/* Upload Progress */}
+        {uploading && (
+          <div style={{
+            backgroundColor: 'rgba(255,255,255,0.02)',
+            padding: 'clamp(20px, 4vw, 24px)',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            marginBottom: 'clamp(20px, 4vw, 24px)'
+          }}>
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: '8px'
+              }}>
+                <span style={{ 
+                  fontSize: 'clamp(13px, 2.5vw, 14px)',
+                  color: 'white',
+                  fontWeight: '600'
+                }}>
+                  Uploading...
+                </span>
+                <span style={{ 
+                  fontSize: 'clamp(13px, 2.5vw, 14px)',
+                  color: '#ff0000',
+                  fontWeight: 'bold'
+                }}>
+                  {uploadProgress}%
+                </span>
+              </div>
+              <div style={{
+                width: '100%',
+                height: '8px',
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                borderRadius: '4px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  width: `${uploadProgress}%`,
+                  height: '100%',
+                  backgroundColor: '#ff0000',
+                  transition: 'width 0.3s ease',
+                  borderRadius: '4px'
+                }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={uploading || (!isCoach && coaches.length === 0)}
+          style={{
+            width: '100%',
+            padding: 'clamp(14px, 3vw, 18px)',
+            backgroundColor: (uploading || (!isCoach && coaches.length === 0)) ? '#666' : '#ff0000',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: (uploading || (!isCoach && coaches.length === 0)) ? 'not-allowed' : 'pointer',
+            fontWeight: 'bold',
+            fontSize: 'clamp(15px, 3vw, 18px)',
+            transition: 'all 0.2s'
+          }}
+        >
+          {uploading ? `Uploading... ${uploadProgress}%` : '📤 Upload Video'}
+        </button>
+      </form>
     </div>
   );
 }

@@ -1,313 +1,454 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from './firebase';
-import AthleteDashboard from './pages/AthleteDashboard';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import AddCoachByCode from './AddCoachByCode';
+import MyCoaches from './MyCoaches';
 
 export default function Dashboard({ user, userData }) {
   const navigate = useNavigate();
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [athletes, setAthletes] = useState([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const isCoach = userData?.role === 'coach';
+  const hasActiveSubscription = userData?.subscriptionStatus === 'active';
+  const freeReviewsRemaining = userData?.freeReviewsRemaining || 0;
 
   useEffect(() => {
-    if (user && userData?.role === 'coach') {
-      loadCoachData();
-    } else {
-      setLoading(false);
-    }
-  }, [user, userData]);
+    const loadVideos = async () => {
+      if (!user?.uid) return;
 
-  const loadCoachData = async () => {
-    try {
-      const videosQuery = query(
-        collection(db, 'videos'),
-        where('coachId', '==', user.uid),
-        orderBy('createdAt', 'desc'),
-        limit(10)
-      );
-      const videosSnapshot = await getDocs(videosQuery);
-      const videosData = videosSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setVideos(videosData);
+      try {
+        let q;
+        if (isCoach) {
+          q = query(
+            collection(db, 'videos'),
+            where('coachId', '==', user.uid),
+            orderBy('uploadedAt', 'desc')
+          );
+        } else {
+          q = query(
+            collection(db, 'videos'),
+            where('athleteId', '==', user.uid),
+            orderBy('uploadedAt', 'desc')
+          );
+        }
 
-      const athletesQuery = query(
-        collection(db, 'users'),
-        where('connectedCoaches', 'array-contains', user.uid)
-      );
-      const athletesSnapshot = await getDocs(athletesQuery);
-      const athletesData = athletesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setAthletes(athletesData);
-    } catch (error) {
-      console.error('Error loading coach data:', error);
-    } finally {
-      setLoading(false);
-    }
+        const snapshot = await getDocs(q);
+        const videoData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setVideos(videoData);
+      } catch (error) {
+        console.error('Error loading videos:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadVideos();
+  }, [user, isCoach, refreshKey]);
+
+  const handleCoachAdded = () => {
+    setRefreshKey(prev => prev + 1);
   };
-
-  if (userData?.role === 'athlete') {
-    return <AthleteDashboard user={user} userData={userData} />;
-  }
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '100px 20px' }}>
-        <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
-        <p style={{ color: '#666' }}>Loading your dashboard...</p>
+      <div style={{ 
+        maxWidth: '1400px', 
+        margin: '0 auto', 
+        padding: 'clamp(20px, 4vw, 40px)',
+        textAlign: 'center'
+      }}>
+        <div className="spinner"></div>
+        <p style={{ color: '#999', marginTop: '20px' }}>Loading dashboard...</p>
       </div>
     );
   }
 
-  const isSubscribed = userData?.subscriptionStatus === 'active';
-  const hasFreeReviews = (userData?.freeReviewsRemaining || 0) > 0;
-  const freeReviewsRemaining = userData?.freeReviewsRemaining || 0;
-  const canUpload = isSubscribed || hasFreeReviews;
-
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px 20px' }}>
-      {/* Free Reviews Banner */}
-      {hasFreeReviews && !isSubscribed && (
-        <div style={{
-          padding: '20px',
-          backgroundColor: '#d1ecf1',
-          border: '2px solid #0c5460',
-          borderRadius: '8px',
-          marginBottom: '30px'
+    <div style={{ 
+      maxWidth: '1400px', 
+      margin: '0 auto', 
+      padding: 'clamp(20px, 4vw, 40px)',
+      minHeight: '100vh'
+    }}>
+      {/* Welcome Header */}
+      <div style={{ 
+        marginBottom: 'clamp(24px, 5vw, 40px)',
+        backgroundColor: 'rgba(255,255,255,0.02)',
+        padding: 'clamp(20px, 4vw, 32px)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.1)'
+      }}>
+        <h1 style={{ 
+          fontSize: 'clamp(24px, 5vw, 36px)', 
+          fontWeight: 'bold', 
+          marginBottom: '8px',
+          color: 'white'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ fontSize: '32px' }}>🎁</span>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ fontWeight: 'bold', marginBottom: '5px', color: '#0c5460' }}>
-                Free Reviews Available!
-              </h3>
-              <p style={{ color: '#0c5460', marginBottom: '10px' }}>
-                You have <strong>{freeReviewsRemaining} free video reviews</strong> remaining. Try out all features before subscribing!
-              </p>
-              <button
-                onClick={() => navigate('/subscription')}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#0c5460',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                View Subscription Plans
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          Welcome back, {userData?.displayName || 'Coach'}! 👋
+        </h1>
+        <p style={{ 
+          color: '#999', 
+          fontSize: 'clamp(14px, 2.5vw, 16px)',
+          margin: 0
+        }}>
+          {isCoach 
+            ? `You have ${videos.length} video${videos.length !== 1 ? 's' : ''} to review` 
+            : `You have ${videos.length} video${videos.length !== 1 ? 's' : ''} uploaded`}
+        </p>
+      </div>
 
-      {/* No Free Reviews Left */}
-      {!isSubscribed && !hasFreeReviews && (
+      {/* Coach Subscription Status */}
+      {isCoach && (
         <div style={{
-          padding: '20px',
-          backgroundColor: '#f8d7da',
-          border: '2px solid #721c24',
-          borderRadius: '8px',
-          marginBottom: '30px'
+          backgroundColor: hasActiveSubscription 
+            ? 'rgba(40, 167, 69, 0.1)' 
+            : freeReviewsRemaining > 0 
+              ? 'rgba(255, 193, 7, 0.1)' 
+              : 'rgba(220, 53, 69, 0.1)',
+          border: `1px solid ${hasActiveSubscription 
+            ? 'rgba(40, 167, 69, 0.3)' 
+            : freeReviewsRemaining > 0 
+              ? 'rgba(255, 193, 7, 0.3)' 
+              : 'rgba(220, 53, 69, 0.3)'}`,
+          padding: 'clamp(16px, 3vw, 24px)',
+          borderRadius: '12px',
+          marginBottom: 'clamp(20px, 4vw, 32px)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ fontSize: '32px' }}>⚠️</span>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ fontWeight: 'bold', marginBottom: '5px', color: '#721c24' }}>
-                Free Reviews Used
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div>
+              <h3 style={{ 
+                fontSize: 'clamp(16px, 3vw, 20px)', 
+                fontWeight: '600', 
+                marginBottom: '4px',
+                color: hasActiveSubscription ? '#28a745' : freeReviewsRemaining > 0 ? '#ffc107' : '#dc3545'
+              }}>
+                {hasActiveSubscription 
+                  ? '✓ Active Subscription' 
+                  : freeReviewsRemaining > 0 
+                    ? `🎁 ${freeReviewsRemaining} Free Reviews Left` 
+                    : '⚠️ No Active Subscription'}
               </h3>
-              <p style={{ color: '#721c24', marginBottom: '10px' }}>
-                Subscribe now to continue creating unlimited video reviews for your athletes.
+              <p style={{ 
+                fontSize: 'clamp(13px, 2.5vw, 14px)', 
+                color: '#ccc',
+                margin: 0
+              }}>
+                {hasActiveSubscription 
+                  ? 'Unlimited video reviews available' 
+                  : freeReviewsRemaining > 0 
+                    ? 'Subscribe for unlimited reviews' 
+                    : 'Subscribe to continue reviewing videos'}
               </p>
+            </div>
+            {!hasActiveSubscription && (
               <button
                 onClick={() => navigate('/subscription')}
                 style={{
-                  padding: '10px 20px',
+                  padding: 'clamp(10px, 2vw, 12px) clamp(20px, 4vw, 24px)',
                   backgroundColor: '#ff0000',
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: 'clamp(13px, 2.5vw, 14px)',
+                  whiteSpace: 'nowrap'
                 }}
               >
-                Subscribe Now
+                View Plans
               </button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      <div style={{ marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '10px' }}>
-          Welcome back, Coach {userData?.displayName}! 👋
-        </h1>
-        <p style={{ color: '#666' }}>
-          {isSubscribed && 'Your subscription is active. Start reviewing videos!'}
-          {hasFreeReviews && !isSubscribed && `You have ${freeReviewsRemaining} free reviews remaining!`}
-          {!isSubscribed && !hasFreeReviews && 'Subscribe to start coaching your athletes.'}
-        </p>
-      </div>
+      {/* Athlete - Add Coach Section */}
+      {!isCoach && (
+        <>
+          <AddCoachByCode user={user} userData={userData} onCoachAdded={handleCoachAdded} />
+          <MyCoaches user={user} userData={userData} key={refreshKey} />
+        </>
+      )}
 
+      {/* Quick Actions */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '20px',
-        marginBottom: '40px'
-      }}>
-        <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff0000' }}>{videos.length}</div>
-          <div style={{ color: '#666', fontSize: '14px' }}>Total Videos</div>
-        </div>
-        <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff0000' }}>{athletes.length}</div>
-          <div style={{ color: '#666', fontSize: '14px' }}>Connected Athletes</div>
-        </div>
-        <div style={{ padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff0000' }}>{userData?.coachCode || '-'}</div>
-          <div style={{ color: '#666', fontSize: '14px' }}>Your Coach Code</div>
-        </div>
-        <div style={{
-          padding: '20px',
-          backgroundColor: isSubscribed ? '#d4edda' : hasFreeReviews ? '#d1ecf1' : '#f8d7da',
-          borderRadius: '8px',
-          border: `1px solid ${isSubscribed ? '#c3e6cb' : hasFreeReviews ? '#bee5eb' : '#f5c6cb'}`
-        }}>
-          <div style={{ fontSize: '16px', fontWeight: 'bold', color: isSubscribed ? '#155724' : hasFreeReviews ? '#0c5460' : '#721c24' }}>
-            {isSubscribed && '✓ Active'}
-            {hasFreeReviews && !isSubscribed && `🎁 ${freeReviewsRemaining} Free Left`}
-            {!isSubscribed && !hasFreeReviews && '✗ Inactive'}
-          </div>
-          <div style={{ color: '#666', fontSize: '14px' }}>Subscription</div>
-        </div>
-      </div>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '20px',
-        marginBottom: '40px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+        gap: 'clamp(16px, 3vw, 20px)',
+        marginBottom: 'clamp(24px, 5vw, 40px)'
       }}>
         <button
-          onClick={() => canUpload ? navigate('/upload') : navigate('/subscription')}
+          onClick={() => navigate('/upload')}
           style={{
-            padding: '30px',
+            padding: 'clamp(20px, 4vw, 24px)',
             backgroundColor: '#ff0000',
             color: 'white',
             border: 'none',
             borderRadius: '12px',
             cursor: 'pointer',
-            textAlign: 'left',
-            opacity: canUpload ? 1 : 0.6
+            fontWeight: 'bold',
+            fontSize: 'clamp(15px, 3vw, 18px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(255,0,0,0.3)'
           }}
+          onMouseEnter={(e) => e.target.style.transform = 'translateY(-2px)'}
+          onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
         >
-          <div style={{ fontSize: '32px', marginBottom: '10px' }}>📹</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '5px' }}>Upload Video</div>
-          <div style={{ fontSize: '14px', opacity: 0.9 }}>
-            {canUpload ? 'Create a new video review' : 'Subscribe to upload'}
-          </div>
+          <span style={{ fontSize: 'clamp(20px, 4vw, 24px)' }}>📹</span>
+          Upload New Video
         </button>
 
-        <button
-          onClick={() => navigate('/profile')}
-          style={{
-            padding: '30px',
-            backgroundColor: '#f8f9fa',
-            color: '#000',
-            border: '1px solid #e9ecef',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            textAlign: 'left'
-          }}
-        >
-          <div style={{ fontSize: '32px', marginBottom: '10px' }}>👤</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '5px' }}>Profile & Settings</div>
-          <div style={{ fontSize: '14px', color: '#666' }}>Update your information</div>
-        </button>
-
-        <button
-          onClick={() => navigate('/subscription')}
-          style={{
-            padding: '30px',
-            backgroundColor: '#f8f9fa',
-            color: '#000',
-            border: '1px solid #e9ecef',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            textAlign: 'left'
-          }}
-        >
-          <div style={{ fontSize: '32px', marginBottom: '10px' }}>💳</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '5px' }}>Subscription</div>
-          <div style={{ fontSize: '14px', color: '#666' }}>
-            {isSubscribed ? 'Manage your plan' : hasFreeReviews ? 'Upgrade now' : 'Choose a plan'}
-          </div>
-        </button>
+        {isCoach && (
+          <button
+            onClick={() => navigate('/profile')}
+            style={{
+              padding: 'clamp(20px, 4vw, 24px)',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              color: 'white',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontWeight: '600',
+              fontSize: 'clamp(15px, 3vw, 18px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '12px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = 'rgba(255,255,255,0.08)';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'rgba(255,255,255,0.05)';
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            <span style={{ fontSize: 'clamp(20px, 4vw, 24px)' }}>👥</span>
+            View My Team
+          </button>
+        )}
       </div>
 
-      <div>
-        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>Recent Videos</h2>
+      {/* Videos Section */}
+      <div style={{
+        backgroundColor: 'rgba(255,255,255,0.02)',
+        padding: 'clamp(20px, 4vw, 32px)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.1)'
+      }}>
+        <h2 style={{ 
+          fontSize: 'clamp(20px, 4vw, 28px)', 
+          fontWeight: 'bold', 
+          marginBottom: 'clamp(20px, 4vw, 24px)',
+          color: 'white'
+        }}>
+          {isCoach ? 'Videos to Review' : 'My Videos'}
+        </h2>
+
         {videos.length === 0 ? (
-          <div style={{
-            padding: '60px 40px',
-            textAlign: 'center',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '12px',
-            border: '2px dashed #dee2e6'
+          <div style={{ 
+            textAlign: 'center', 
+            padding: 'clamp(40px, 8vw, 60px)',
+            color: '#999'
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🎥</div>
-            <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '10px' }}>No Videos Yet</h3>
-            <p style={{ color: '#666', marginBottom: '20px' }}>
-              {canUpload
-                ? 'Upload your first video to start creating reviews for your athletes.'
-                : 'Subscribe to start uploading and reviewing videos.'}
+            <div style={{ fontSize: 'clamp(48px, 10vw, 64px)', marginBottom: '16px' }}>📹</div>
+            <h3 style={{ 
+              fontSize: 'clamp(18px, 3.5vw, 22px)', 
+              marginBottom: '12px',
+              color: '#ccc'
+            }}>
+              No videos yet
+            </h3>
+            <p style={{ 
+              fontSize: 'clamp(14px, 2.5vw, 16px)',
+              marginBottom: '24px'
+            }}>
+              {isCoach 
+                ? 'Videos uploaded by your athletes will appear here' 
+                : 'Upload your first video to get started'}
             </p>
             <button
-              onClick={() => canUpload ? navigate('/upload') : navigate('/subscription')}
+              onClick={() => navigate('/upload')}
               style={{
-                padding: '12px 24px',
+                padding: 'clamp(12px, 2.5vw, 14px) clamp(24px, 5vw, 32px)',
                 backgroundColor: '#ff0000',
                 color: 'white',
                 border: 'none',
-                borderRadius: '6px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: 'clamp(14px, 2.5vw, 16px)'
               }}
             >
-              {canUpload ? 'Upload First Video' : 'View Plans'}
+              Upload Video
             </button>
           </div>
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: '20px'
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
+            gap: 'clamp(16px, 3vw, 20px)'
           }}>
             {videos.map(video => (
               <div
                 key={video.id}
-                onClick={() => navigate(`/review/${video.id}`)}
                 style={{
-                  padding: '20px',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '8px',
-                  border: '1px solid #e9ecef',
-                  cursor: 'pointer'
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
+                  e.currentTarget.style.borderColor = 'rgba(255,0,0,0.3)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                }}
+                onClick={() => {
+                  if (isCoach) {
+                    navigate(`/editor/${video.id}`);
+                  } else {
+                    navigate(`/review/${video.id}`, { state: { videoId: video.id } });
+                  }
                 }}
               >
-                <div style={{ fontSize: '20px', marginBottom: '10px' }}>🎥</div>
-                <h3 style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-                  {video.title || 'Untitled Video'}
-                </h3>
-                <p style={{ fontSize: '14px', color: '#666' }}>
-                  {video.createdAt?.toDate?.()?.toLocaleDateString() || 'No date'}
-                </p>
+                {/* Video Thumbnail */}
+                <div style={{
+                  width: '100%',
+                  aspectRatio: '16/9',
+                  backgroundColor: '#111',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative'
+                }}>
+                  {video.thumbnailUrl ? (
+                    <img 
+                      src={video.thumbnailUrl} 
+                      alt={video.name}
+                      style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'cover' 
+                      }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 'clamp(32px, 6vw, 48px)' }}>🎥</div>
+                  )}
+                  {video.reviewed && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '8px',
+                      right: '8px',
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      fontSize: 'clamp(11px, 2vw, 12px)',
+                      fontWeight: 'bold'
+                    }}>
+                      ✓ Reviewed
+                    </div>
+                  )}
+                </div>
+
+                {/* Video Info */}
+                <div style={{ padding: 'clamp(12px, 3vw, 16px)' }}>
+                  <h3 style={{ 
+                    fontSize: 'clamp(15px, 3vw, 18px)', 
+                    fontWeight: '600',
+                    marginBottom: '8px',
+                    color: 'white',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {video.name || 'Untitled Video'}
+                  </h3>
+                  <div style={{ 
+                    fontSize: 'clamp(12px, 2.5vw, 14px)', 
+                    color: '#999',
+                    marginBottom: '8px'
+                  }}>
+                    {video.uploadedAt?.toDate?.().toLocaleDateString() || 'Recently'}
+                  </div>
+                  {video.athleteName && isCoach && (
+                    <div style={{ 
+                      fontSize: 'clamp(12px, 2.5vw, 13px)', 
+                      color: '#666',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <span>👤</span> {video.athleteName}
+                    </div>
+                  )}
+                  {video.coachName && !isCoach && (
+                    <div style={{ 
+                      fontSize: 'clamp(12px, 2.5vw, 13px)', 
+                      color: '#666',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <span>🏆</span> {video.coachName}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Button */}
+                <div style={{ 
+                  padding: '0 clamp(12px, 3vw, 16px) clamp(12px, 3vw, 16px)',
+                  borderTop: '1px solid rgba(255,255,255,0.05)'
+                }}>
+                  <button
+                    style={{
+                      width: '100%',
+                      padding: 'clamp(10px, 2vw, 12px)',
+                      backgroundColor: isCoach 
+                        ? (video.reviewed ? 'rgba(255,255,255,0.1)' : '#ff0000')
+                        : (video.reviewed ? '#28a745' : 'rgba(255,255,255,0.1)'),
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      fontSize: 'clamp(13px, 2.5vw, 14px)',
+                      marginTop: 'clamp(8px, 2vw, 12px)'
+                    }}
+                  >
+                    {isCoach 
+                      ? (video.reviewed ? 'Edit Review' : 'Review Video')
+                      : (video.reviewed ? 'Watch Review' : 'Pending Review')}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
